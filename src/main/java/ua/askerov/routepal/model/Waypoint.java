@@ -1,0 +1,29 @@
+package ua.askerov.routepal.model;
+
+// --- DTO: Клас для представлення однієї точки ---
+public class Waypoint {
+    private double latitude;
+    private double longitude;
+
+    // Сеттери та геттери потрібні для автоматичного мапінгу JSON
+    public double getLatitude() {
+        return latitude;
+    }
+
+    public void setLatitude(double latitude) {
+        this.latitude = latitude;
+    }
+
+    public double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(double longitude) {
+        this.longitude = longitude;
+    }
+
+    @Override
+    public String toString() {
+        return "Waypoint{" + "lat=" + latitude + ", lon=" + longitude + '}';
+    }
+}
