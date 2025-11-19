@@ -4,6 +4,16 @@ package ua.askerov.routepal.model;
 public class Waypoint {
     private double latitude;
     private double longitude;
+    private double elevation;
+
+    public Waypoint() {
+    }
+
+    public Waypoint(double latitude, double longitude, double elevation) {
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.elevation = elevation;
+    }
 
     // Сеттери та геттери потрібні для автоматичного мапінгу JSON
     public double getLatitude() {
@@ -20,6 +30,14 @@ public class Waypoint {
 
     public void setLongitude(double longitude) {
         this.longitude = longitude;
+    }
+
+    public double getElevation() {
+        return elevation;
+    }
+
+    public void setElevation(double elevation) {
+        this.elevation = elevation;
     }
 
     @Override
