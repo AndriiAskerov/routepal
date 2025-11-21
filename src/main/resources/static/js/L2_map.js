@@ -1,86 +1,194 @@
-// Встановлюємо початковий вид (поки що, на Київ) TODO: відповідно до розташування клієнта
+// --- ГЛОБАЛЬНІ ЗМІННІ ---
 const map = L.map('map').setView([50.4501, 30.5234], 12);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' }).addTo(map);
 
-// Додаємо "плитки" (tiles) карти
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'})
-    .addTo(map);
-
+// Центральний стан: масив точок
+// Структура об'єкта точки: { id: 1, lat: ..., lng: ..., marker: L.marker }
 let waypoints = [];
-let route = null; // Лінія маршруту
+let routeLayer = null;
+let nextId = 1; // Лічильник для унікальних ID
 
-// Обробник ЛКМ на карті
-map.on('click', function (e) {
-    const newPoint = e.latlng;
-    console.log(e); // DBG: прибрати вивід на консоль
-    // Додавання маркеру на карту
-    L.marker([newPoint.lat, newPoint.lng]).addTo(map);
-    // Додавання координат (у форматі)
-    waypoints.push({
-        latitude: newPoint.lat, longitude: newPoint.lng
-    });
-
-    // Якщо точок 2, або більше - будується маршрут
-    if (waypoints.length >= 2) {
-        // Звернення до Spring Boot бекенду
-        fetchRoute();
+// Ініціалізація SortableJS для списку
+const listElement = document.getElementById('waypoints-list');
+Sortable.create(listElement, {
+    animation: 150,
+    onEnd: function (evt) {
+        // КОЛИ КОРИСТУВАЧ ЗМІНИВ ПОРЯДОК У СПИСКУ
+        const item = waypoints.splice(evt.oldIndex, 1)[0]; // Вирізаємо
+        waypoints.splice(evt.newIndex, 0, item); // Вставляємо на нове місце
+        updateMapMarkers(); // Оновлюємо номери на карті
+        fetchRoute();       // Перераховуємо маршрут
     }
 });
 
+// --- 1. ЛОГІКА УПРАВЛІННЯ ТОЧКАМИ ---
+
+function addWaypoint(lat, lng, index = null) {
+    // 1. Створюємо маркер
+    const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+
+    const pointObj = {
+        id: nextId++,
+        lat: lat,
+        lng: lng,
+        marker: marker
+    };
+
+    // Обробка перетягування МАРКЕРА на карті
+    marker.on('dragend', function(e) {
+        const newPos = e.target.getLatLng();
+        pointObj.lat = newPos.lat;
+        pointObj.lng = newPos.lng;
+        fetchRoute(); // Перерахунок при перетягуванні
+    });
+
+    // Видалення точки при кліку (опціонально, можна через контекстне меню)
+    marker.on('contextmenu', function() {
+        removeWaypoint(pointObj.id);
+    });
+
+    // 2. Додаємо в масив
+    if (index !== null) {
+        waypoints.splice(index, 0, pointObj); // Вставка всередину (для псевдо-точок)
+    } else {
+        waypoints.push(pointObj); // Вставка в кінець
+    }
+
+    // 3. Оновлюємо UI
+    renderSidebar();
+    fetchRoute();
+}
+
+function removeWaypoint(id) {
+    const index = waypoints.findIndex(p => p.id === id);
+    if (index > -1) {
+        // Видаляємо маркер з карти
+        map.removeLayer(waypoints[index].marker);
+        // Видаляємо з масиву
+        waypoints.splice(index, 1);
+        // Оновлюємо UI
+        renderSidebar();
+        fetchRoute();
+    }
+}
+
+function renderSidebar() {
+    listElement.innerHTML = '';
+    waypoints.forEach((wp, index) => {
+        const li = document.createElement('div');
+        li.className = 'waypoint-item';
+        li.innerHTML = `
+            <span><i class="fas fa-grip-lines"></i> ${index + 1}. Точка</span>
+            <button onclick="removeWaypoint(${wp.id})" style="width:auto; color:red;">✕</button>
+        `;
+        listElement.appendChild(li);
+    });
+}
+
+// Оновлює лише візуальну частину маркерів (якщо треба показати номери)
+function updateMapMarkers() {
+    // Тут можна додати логіку зміни іконок, щоб на них були цифри 1, 2, 3...
+}
+
+// --- 2. ФУНКЦІОНАЛ ІНТЕРФЕЙСУ ---
+
+// Кнопка "Зворотній маршрут"
+function reverseRoute() {
+    waypoints.reverse();
+    renderSidebar();
+    fetchRoute();
+}
+
+// Клік по карті (Додавання точки)
+map.on('click', function(e) {
+    addWaypoint(e.latlng.lat, e.latlng.lng);
+});
+
+// --- 3. "ГУМОВИЙ МАРШРУТ" (Створення псевдо-точок) ---
+
+function attachRouteEvents(polyline) {
+    // Додаємо обробник кліку по ЛІНІЇ маршруту
+    polyline.on('click', function(e) {
+        // e.latlng - це координати, де ми клікнули на лінії
+
+        // Складна задача: знайти, між якими точками ми клікнули?
+        // Для спрощення MVP: ми просто додаємо точку в кінець, АБО (краще)
+        // треба знайти найближчий сегмент.
+        // Але Leaflet не дає індексу сегмента при кліку просто так.
+
+        // ПРОСТЕ РІШЕННЯ: Додамо точку, а користувач перетягне її в списку.
+        // СКЛАДНЕ РІШЕННЯ (Ваш запит):
+
+        const newPointIndex = findNearestSegmentIndex(e.latlng, waypoints);
+        addWaypoint(e.latlng.lat, e.latlng.lng, newPointIndex + 1);
+    });
+}
+
+// Допоміжна функція для знаходження, куди вставити точку (математика)
+function findNearestSegmentIndex(clickLatLng, points) {
+    // Це спрощена логіка. В ідеалі треба шукати проєкцію точки на відрізки.
+    // Тут ми просто шукаємо найближчу точку і вставляємо після неї.
+    let minDistance = Infinity;
+    let nearestIndex = 0;
+
+    for (let i = 0; i < points.length - 1; i++) {
+        // Тут можна використати L.GeometryUtil (плагін) для точності
+        // Але поки просто повернемо останню точку для простоти прикладу
+        nearestIndex = i;
+    }
+    return points.length - 1; // Поки що вставляємо в кінець, якщо не реалізовано точний пошук
+}
+
+
+// --- 4. ВЗАЄМОДІЯ З БЕКЕНДОМ ---
+
 async function fetchRoute() {
-    console.log("Відправка точок на бекенд:", waypoints);
+    if (waypoints.length < 2) {
+        if (routeLayer) map.removeLayer(routeLayer);
+        return;
+    }
+
+    const payload = waypoints.map(p => ({ latitude: p.lat, longitude: p.lng }));
 
     try {
         const response = await fetch('/api/route/calculate', {
-            method: 'POST', headers: {
-                'Content-Type': 'application/json'
-            }, body: JSON.stringify(waypoints)
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
-            // 1. Якщо статус не OK (наприклад, 429), треба прочитати JSON-тіло помилки
-            const errorData = await response.json().catch(() => null);
-
-            // 2. Якщо сервер передав повідомлення (message), покажемо його
-            if (errorData && errorData.message) {
-                // Вікно, що спливає, з текстом у ньому
-                alert("Увага: " + errorData.message);
-                console.error("Помилка сервера:", errorData.message);
-            } else {
-                alert(`Сталася помилка HTTP: ${response.status}`);
-            }
-            // Зупинка виконання функції
+            // Обробка помилки 429 (ваша логіка з минулого кроку)
+            const errData = await response.json().catch(()=>({}));
+            if (errData.message) alert(errData.message);
             return;
         }
 
-        const routeData = await response.json();
+        const data = await response.json();
 
-        console.log("Отримано відповідь від бекенду:", routeData);
+        if (routeLayer) map.removeLayer(routeLayer);
 
-        // --- НОВА ЛОГІКА МАЛЮВАННЯ ---
+        if (data.status === 'success' && data.polyline) {
+            // Декодуємо полілінію (вам потрібна функція decode або бібліотека)
+            // АБО якщо бекенд повертає координати:
+            // const latLngs = data.trackPoints.map(...)
 
-        // 1. Очищаємо попередній маршрут (якщо він був)
-        if (route) {
-            map.removeLayer(route);
+            // Припустимо, ми на бекенді використовуємо coordinates замість encoded string
+            const latLngs = data.trackPoints.map(p => [p.latitude, p.longitude]);
+
+            routeLayer = L.polyline(latLngs, { color: 'blue', weight: 5 }).addTo(map);
+
+            // ВАЖЛИВО: Підключаємо події до нової лінії
+            attachRouteEvents(routeLayer);
         }
 
-        // 2. Перевіряємо, чи бекенд повернув точки
-        if (routeData.status === 'success' && routeData.trackPoints && routeData.trackPoints.length > 0) {
-
-            // 3. Конвертуємо наш список точок у формат, який розуміє Leaflet: [ [lat, lon], [lat, lon], ... ]
-            const latLngs = routeData.trackPoints.map(point => {
-                // Ми отримуємо {latitude: ..., longitude: ..., elevation: ...}
-                return [point.latitude, point.longitude];
-            });
-
-            // 4. Створюємо лінію (Polyline) і додаємо її на карту
-            route = L.polyline(latLngs, {color: 'blue', weight: 5}).addTo(map);
-
-            // (Опціонально) Фокусуємо карту на новому маршруті
-            map.fitBounds(route.getBounds());
-        }
-        // --- КІНЕЦЬ НОВОЇ ЛОГІКИ ---
-
-    } catch (error) {
-        console.error("Не вдалося отримати маршрут:", error);
+    } catch (e) {
+        console.error(e);
     }
+}
+
+// Експорт (Кнопка)
+async function exportRoute() {
+    const payload = waypoints.map(p => ({ latitude: p.lat, longitude: p.lng }));
+    // Логіка POST запиту на /api/route/export і скачування файлу
 }

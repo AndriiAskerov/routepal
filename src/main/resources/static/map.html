@@ -13,13 +13,32 @@
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
           crossorigin=""></script>
 
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+  <link rel="stylesheet" href="/css/map.css">
   <script src="/js/L2_map.js" defer></script>
 
 </head>
 <body>
 
-<div id="map"></div>
+<div class="container">
+  <div class="sidebar">
+    <h2>Маршрут</h2>
+
+    <div id="waypoints-list" class="list-group">
+    </div>
+
+    <div class="controls">
+      <button onclick="addPointMode()" class="btn"><i class="fas fa-plus"></i> Додати точку</button>
+      <button onclick="reverseRoute()" class="btn"><i class="fas fa-exchange-alt"></i> Зворотній</button>
+      <button onclick="exportRoute()" class="btn btn-primary"><i class="fas fa-file-export"></i> Експорт GPX</button>
+    </div>
+    <div id="route-info"></div>
+  </div>
+
+  <div id="map"></div>
+</div>
 
 </body>
 </html>

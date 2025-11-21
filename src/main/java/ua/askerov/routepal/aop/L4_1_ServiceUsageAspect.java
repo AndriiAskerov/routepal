@@ -19,7 +19,7 @@ public class L4_1_ServiceUsageAspect {
     }
 
     // методи, що відстежується
-    @Pointcut("execution(* ua.askerov.routepal.service.impl.L4_2_RouteServiceImpl_Mock.calculateRoute(..))")
+    @Pointcut("execution(* ua.askerov.routepal.service.impl.L4_2_RouteServiceImpl.calculateRoute(..))")
     public void routeServiceCall() {
     }
 
@@ -29,7 +29,9 @@ public class L4_1_ServiceUsageAspect {
         if (!auditor.tryIncrementDirectionsCounter()) {
             // інформуємо клієнта, що ліміт вичерпано
             System.err.println("Перевищено ліміт запитів"); // DBG вивід на консоль TODO логування
-            return new RouteResponseDTO("ERR", "Денний ліміт v2/directions вичерпано. Спробуйте завтра");
+            return RouteResponseDTO.builder()
+                    .status("error")
+                    .message(this.getClass().getSimpleName() + "Денний ліміт 'v2/directions вичерпано'. Спробуйте завтра").build();
         }
         // виклик самого методу (ліміт не вичерпано)
         return joinPoint.proceed();

@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import ua.askerov.routepal.model.RouteResponseDTO;
 import ua.askerov.routepal.model.Waypoint;
-import ua.askerov.routepal.service.impl.L4_2_RouteServiceImpl_Mock;
+import ua.askerov.routepal.service.impl.L4_2_RouteServiceImpl;
 
 import java.util.List;
 
@@ -14,9 +14,9 @@ import java.util.List;
 @RequestMapping("/api/route")
 public class L3_RouteController {
 
-    private final L4_2_RouteServiceImpl_Mock routeService; // Ін'єкція сервісу
+    private final L4_2_RouteServiceImpl routeService; // Ін'єкція сервісу
 
-    public L3_RouteController(L4_2_RouteServiceImpl_Mock routeService) {
+    public L3_RouteController(L4_2_RouteServiceImpl routeService) {
         this.routeService = routeService;
     }
 

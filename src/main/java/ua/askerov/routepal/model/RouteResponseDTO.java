@@ -1,27 +1,28 @@
 package ua.askerov.routepal.model;
 
+import java.util.List;
+
 public class RouteResponseDTO {
 
     private String status;
     private String message;
-    private String polyline;            // Закодований маршрут для малювання на карті
-    private double distanceMeters;      // Загальна відстань
-    private long durationSeconds;       // Загальний час у дорозі
+    private List<Waypoint> trackPoints;
+    private double distanceMeters;
+    private long durationSeconds;
 
-    public RouteResponseDTO(String status, String message) {
-        this.status = status;
-        this.message = message;
-        this.polyline = "";
-        this.distanceMeters = 0L;
-        this.durationSeconds = 0;
+    public RouteResponseDTO() {
     }
 
-    public RouteResponseDTO(String status, String message, String polyline, double distanceMeters, long durationSeconds) {
-        this.status = status;
-        this.message = message;
-        this.polyline = polyline;
-        this.distanceMeters = distanceMeters;
-        this.durationSeconds = durationSeconds;
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    private RouteResponseDTO(Builder builder) {
+        this.status = builder.status;
+        this.message = builder.message;
+        this.trackPoints = builder.trackPoints;
+        this.distanceMeters = builder.distanceMeters;
+        this.durationSeconds = builder.durationSeconds;
     }
 
     public String getStatus() {
@@ -40,12 +41,12 @@ public class RouteResponseDTO {
         this.message = message;
     }
 
-    public String getPolyline() {
-        return polyline;
+    public List<Waypoint> getTrackPoints() {
+        return trackPoints;
     }
 
-    public void setPolyline(String polyline) {
-        this.polyline = polyline;
+    public void setTrackPoints(List<Waypoint> trackPoints) {
+        this.trackPoints = trackPoints;
     }
 
     public double getDistanceMeters() {
@@ -62,5 +63,42 @@ public class RouteResponseDTO {
 
     public void setDurationSeconds(long durationSeconds) {
         this.durationSeconds = durationSeconds;
+    }
+
+    public static class Builder {
+        private String status;
+        private String message;
+        private List<Waypoint> trackPoints;
+        private double distanceMeters;
+        private long durationSeconds;
+
+        public Builder status(String status) {
+            this.status = status;
+            return this;
+        }
+
+        public Builder message(String message) {
+            this.message = message;
+            return this;
+        }
+
+        public Builder trackPoints(List<Waypoint> trackPoints) {
+            this.trackPoints = trackPoints;
+            return this;
+        }
+
+        public Builder distanceMeters(double distanceMeters) {
+            this.distanceMeters = distanceMeters;
+            return this;
+        }
+
+        public Builder durationSeconds(long durationSeconds) {
+            this.durationSeconds = durationSeconds;
+            return this;
+        }
+
+        public RouteResponseDTO build() {
+            return new RouteResponseDTO(this);
+        }
     }
 }

@@ -1,6 +1,5 @@
 package ua.askerov.routepal.model;
 
-// --- DTO: Клас для представлення однієї точки ---
 public class Waypoint {
     private double latitude;
     private double longitude;
@@ -15,7 +14,6 @@ public class Waypoint {
         this.elevation = elevation;
     }
 
-    // Сеттери та геттери потрібні для автоматичного мапінгу JSON
     public double getLatitude() {
         return latitude;
     }
@@ -42,6 +40,10 @@ public class Waypoint {
 
     @Override
     public String toString() {
-        return "Waypoint{" + "lat=" + latitude + ", lon=" + longitude + '}';
+        return "Waypoint{" +
+                "latitude=" + latitude +
+                ", longitude=" + longitude +
+                ", elevation=" + elevation +
+                '}';
     }
 }

@@ -1,0 +1,11 @@
+body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
+.container { display: flex; flex: 1; height: 100%; }
+.sidebar { width: 350px; background: #fff; padding: 10px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1000; display: flex; flex-direction: column; }
+#map { flex: 1; }
+
+/* Стилі списку */
+.waypoint-item { background: #f8f9fa; border: 1px solid #ddd; padding: 10px; margin-bottom: 5px; cursor: grab; display: flex; align-items: center; justify-content: space-between; }
+.waypoint-item:active { cursor: grabbing; }
+.waypoint-name { flex-grow: 1; margin-left: 10px; font-weight: bold; }
+.btn { padding: 8px 12px; margin: 5px 0; cursor: pointer; width: 100%; }
+.btn-primary { background-color: #007bff; color: white; border: none; }
