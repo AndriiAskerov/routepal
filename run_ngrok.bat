@@ -1,0 +1,3 @@
+@echo off
+ngrok config add-authtoken 35vE7ZFlCpWER9ced9Hgk38lVzM_2W8Xn5xRiQsir4FfAEVEg
+ngrok http 8080
