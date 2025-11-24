@@ -1,194 +1,398 @@
-// --- ГЛОБАЛЬНІ ЗМІННІ ---
+// ==========================================
+// 1. GLOBALS & CONFIGURATION
+// ==========================================
 const map = L.map('map').setView([50.4501, 30.5234], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' }).addTo(map);
 
-// Центральний стан: масив точок
-// Структура об'єкта точки: { id: 1, lat: ..., lng: ..., marker: L.marker }
+const routeCache = new Map();
 let waypoints = [];
 let routeLayer = null;
-let nextId = 1; // Лічильник для унікальних ID
+let nextId = 1;
+let fetchTimeout = null;
 
-// Ініціалізація SortableJS для списку
+// ==========================================
+// 2. INITIALIZATION (SortableJS & Events)
+// ==========================================
 const listElement = document.getElementById('waypoints-list');
+
 Sortable.create(listElement, {
     animation: 150,
+    handle: '.handle',
+
+    // --- НОВІ НАЛАШТУВАННЯ ---
+    forceFallback: true,        // Вимикаємо нативний Drag&Drop (прибирає системну "примару")
+    fallbackClass: 'sortable-drag-clone', // Клас для елемента під курсором
+    ghostClass: 'sortable-placeholder',   // Клас для місця вставки (пунктир)
+    fallbackOnBody: true,       // Щоб елемент не обрізався межами списку
+
     onEnd: function (evt) {
-        // КОЛИ КОРИСТУВАЧ ЗМІНИВ ПОРЯДОК У СПИСКУ
-        const item = waypoints.splice(evt.oldIndex, 1)[0]; // Вирізаємо
-        waypoints.splice(evt.newIndex, 0, item); // Вставляємо на нове місце
-        updateMapMarkers(); // Оновлюємо номери на карті
-        fetchRoute();       // Перераховуємо маршрут
+        if (evt.oldIndex === evt.newIndex) return;
+
+        const item = waypoints.splice(evt.oldIndex, 1)[0];
+        waypoints.splice(evt.newIndex, 0, item);
+
+        refreshUI();
+        fetchRoute();
     }
 });
 
-// --- 1. ЛОГІКА УПРАВЛІННЯ ТОЧКАМИ ---
+// Клік по карті додає точку
+map.on('click', (e) => addWaypoint(e.latlng.lat, e.latlng.lng));
 
-function addWaypoint(lat, lng, index = null) {
-    // 1. Створюємо маркер
-    const marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+// ==========================================
+// 3. CORE STATE MANAGEMENT (Add, Remove, Update)
+// ==========================================
+
+function addWaypoint(lat, lng, index = null, isSilent = false) {
+    const marker = createMarker(lat, lng);
 
     const pointObj = {
         id: nextId++,
         lat: lat,
         lng: lng,
-        marker: marker
+        marker: marker,
+        name: "",
+        isCustom: false
     };
 
-    // Обробка перетягування МАРКЕРА на карті
-    marker.on('dragend', function(e) {
-        const newPos = e.target.getLatLng();
-        pointObj.lat = newPos.lat;
-        pointObj.lng = newPos.lng;
-        fetchRoute(); // Перерахунок при перетягуванні
-    });
-
-    // Видалення точки при кліку (опціонально, можна через контекстне меню)
-    marker.on('contextmenu', function() {
-        removeWaypoint(pointObj.id);
-    });
-
-    // 2. Додаємо в масив
+    // Вставка в масив (в кінець або за індексом)
     if (index !== null) {
-        waypoints.splice(index, 0, pointObj); // Вставка всередину (для псевдо-точок)
+        waypoints.splice(index, 0, pointObj);
     } else {
-        waypoints.push(pointObj); // Вставка в кінець
+        waypoints.push(pointObj);
     }
 
-    // 3. Оновлюємо UI
-    renderSidebar();
-    fetchRoute();
+    // Налаштування подій маркера
+    setupMarkerEvents(marker, pointObj);
+
+    refreshUI();
+
+    if (!isSilent) {
+        fetchRoute();
+    }
 }
 
 function removeWaypoint(id) {
     const index = waypoints.findIndex(p => p.id === id);
     if (index > -1) {
-        // Видаляємо маркер з карти
         map.removeLayer(waypoints[index].marker);
-        // Видаляємо з масиву
         waypoints.splice(index, 1);
-        // Оновлюємо UI
-        renderSidebar();
+
+        refreshUI();
         fetchRoute();
     }
 }
 
-function renderSidebar() {
-    listElement.innerHTML = '';
-    waypoints.forEach((wp, index) => {
-        const li = document.createElement('div');
-        li.className = 'waypoint-item';
-        li.innerHTML = `
-            <span><i class="fas fa-grip-lines"></i> ${index + 1}. Точка</span>
-            <button onclick="removeWaypoint(${wp.id})" style="width:auto; color:red;">✕</button>
-        `;
-        listElement.appendChild(li);
-    });
-}
-
-// Оновлює лише візуальну частину маркерів (якщо треба показати номери)
-function updateMapMarkers() {
-    // Тут можна додати логіку зміни іконок, щоб на них були цифри 1, 2, 3...
-}
-
-// --- 2. ФУНКЦІОНАЛ ІНТЕРФЕЙСУ ---
-
-// Кнопка "Зворотній маршрут"
 function reverseRoute() {
     waypoints.reverse();
-    renderSidebar();
+    refreshUI();
     fetchRoute();
 }
 
-// Клік по карті (Додавання точки)
-map.on('click', function(e) {
-    addWaypoint(e.latlng.lat, e.latlng.lng);
-});
+function updatePointName(id, newName) {
+    const point = waypoints.find(p => p.id === id);
+    if (point) {
+        point.name = newName;
+        point.isCustom = true;
+    }
+}
 
-// --- 3. "ГУМОВИЙ МАРШРУТ" (Створення псевдо-точок) ---
+// ==========================================
+// 4. UI RENDERING & VISUALS
+// ==========================================
 
-function attachRouteEvents(polyline) {
-    // Додаємо обробник кліку по ЛІНІЇ маршруту
-    polyline.on('click', function(e) {
-        // e.latlng - це координати, де ми клікнули на лінії
+// Оновлює і список, і маркери на карті
+function refreshUI() {
+    updateMapMarkers();
+    renderSidebar();
+}
 
-        // Складна задача: знайти, між якими точками ми клікнули?
-        // Для спрощення MVP: ми просто додаємо точку в кінець, АБО (краще)
-        // треба знайти найближчий сегмент.
-        // Але Leaflet не дає індексу сегмента при кліку просто так.
+function renderSidebar() {
+    listElement.innerHTML = '';
+    const template = document.getElementById('waypoint-template');
 
-        // ПРОСТЕ РІШЕННЯ: Додамо точку, а користувач перетягне її в списку.
-        // СКЛАДНЕ РІШЕННЯ (Ваш запит):
+    waypoints.forEach((wp, index) => {
+        // 1. Клонуємо вміст шаблону
+        const clone = template.content.cloneNode(true);
 
-        const newPointIndex = findNearestSegmentIndex(e.latlng, waypoints);
-        addWaypoint(e.latlng.lat, e.latlng.lng, newPointIndex + 1);
+        // 2. Знаходимо елементи всередині клону
+        const numberSpan = clone.querySelector('.waypoint-number');
+        const nameInput = clone.querySelector('.waypoint-name-input');
+        const deleteBtn = clone.querySelector('.btn-delete');
+
+        // 3. Заповнюємо даними
+        numberSpan.textContent = `${index + 1}.`;
+
+        // Логіка визначення назви
+        let displayName = wp.name;
+        if (!wp.isCustom) {
+            if (index === 0) displayName = "Старт";
+            else if (index === waypoints.length - 1 && waypoints.length > 1) displayName = "Фініш";
+            else displayName = `Точка`;
+        }
+        nameInput.value = displayName;
+
+        // 4. Додаємо обробники подій (Event Listeners)
+        nameInput.addEventListener('change', (e) => {
+            updatePointName(wp.id, e.target.value);
+        });
+
+        nameInput.addEventListener('focus', (e) => {
+            e.target.select();
+        });
+
+        deleteBtn.addEventListener('click', () => {
+            removeWaypoint(wp.id);
+        });
+
+        // 5. Додаємо готовий елемент у список
+        listElement.appendChild(clone);
     });
 }
 
-// Допоміжна функція для знаходження, куди вставити точку (математика)
-function findNearestSegmentIndex(clickLatLng, points) {
-    // Це спрощена логіка. В ідеалі треба шукати проєкцію точки на відрізки.
-    // Тут ми просто шукаємо найближчу точку і вставляємо після неї.
-    let minDistance = Infinity;
-    let nearestIndex = 0;
-
-    for (let i = 0; i < points.length - 1; i++) {
-        // Тут можна використати L.GeometryUtil (плагін) для точності
-        // Але поки просто повернемо останню точку для простоти прикладу
-        nearestIndex = i;
-    }
-    return points.length - 1; // Поки що вставляємо в кінець, якщо не реалізовано точний пошук
+function updateMapMarkers() {
+    waypoints.forEach((wp, index) => {
+        const newIcon = createNumberedIcon(index + 1);
+        wp.marker.setIcon(newIcon);
+        wp.marker.setZIndexOffset(100 + index);
+    });
 }
 
+function createMarker(lat, lng) {
+    return L.marker([lat, lng], { draggable: true }).addTo(map);
+}
 
-// --- 4. ВЗАЄМОДІЯ З БЕКЕНДОМ ---
+function setupMarkerEvents(marker, pointObj) {
+    // Drag & Drop маркера
+    marker.on('dragend', function(e) {
+        const newPos = e.target.getLatLng();
+        pointObj.lat = newPos.lat;
+        pointObj.lng = newPos.lng;
+        fetchRoute();
+    });
+
+    // Context Menu (ПКМ)
+    marker.on('contextmenu', function() {
+        removeWaypoint(pointObj.id);
+    });
+}
+
+// ==========================================
+// 5. API INTERACTION (Fetch, Debounce, Cache)
+// ==========================================
 
 async function fetchRoute() {
+    // Debounce: скидаємо попередній таймер
+    if (fetchTimeout) clearTimeout(fetchTimeout);
+
     if (waypoints.length < 2) {
-        if (routeLayer) map.removeLayer(routeLayer);
+        clearRouteLayer();
+        document.getElementById('route-info').innerHTML = '';
+        return;
+    }
+
+    const cacheKey = generateCacheKey(waypoints);
+
+    // Перевірка кешу (миттєве малювання)
+    if (routeCache.has(cacheKey)) {
+        console.log("Маршрут з кешу");
+        drawRoute(routeCache.get(cacheKey));
+        return;
+    }
+
+    // Відкладений запит
+    fetchTimeout = setTimeout(async () => {
+        const payload = waypoints.map(p => ({ latitude: p.lat, longitude: p.lng }));
+
+        try {
+            const response = await fetch('/api/route/calculate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(()=>({}));
+                if (errData.message) alert(errData.message);
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                routeCache.set(cacheKey, data);
+                drawRoute(data);
+            }
+        } catch (e) {
+            console.error("API Error:", e);
+        }
+    }, 500); // 500ms затримка
+}
+
+async function exportRoute() {
+    if (waypoints.length < 2) {
+        alert("Для експорту потрібно побудувати маршрут (мінімум 2 точки).");
         return;
     }
 
     const payload = waypoints.map(p => ({ latitude: p.lat, longitude: p.lng }));
 
     try {
-        const response = await fetch('/api/route/calculate', {
+        const response = await fetch('/api/route/export', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
-            // Обробка помилки 429 (ваша логіка з минулого кроку)
-            const errData = await response.json().catch(()=>({}));
-            if (errData.message) alert(errData.message);
+            const errData = await response.json().catch(() => null);
+            if (errData && errData.message) alert(errData.message);
+            else alert(`Помилка експорту: ${response.status}`);
             return;
         }
 
-        const data = await response.json();
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
 
-        if (routeLayer) map.removeLayer(routeLayer);
+        a.download = makeFileName();
+        document.body.appendChild(a);
+        a.click();
 
-        if (data.status === 'success' && data.polyline) {
-            // Декодуємо полілінію (вам потрібна функція decode або бібліотека)
-            // АБО якщо бекенд повертає координати:
-            // const latLngs = data.trackPoints.map(...)
-
-            // Припустимо, ми на бекенді використовуємо coordinates замість encoded string
-            const latLngs = data.trackPoints.map(p => [p.latitude, p.longitude]);
-
-            routeLayer = L.polyline(latLngs, { color: 'blue', weight: 5 }).addTo(map);
-
-            // ВАЖЛИВО: Підключаємо події до нової лінії
-            attachRouteEvents(routeLayer);
-        }
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
 
     } catch (e) {
-        console.error(e);
+        console.error("Export failed:", e);
+        alert("Не вдалося експортувати маршрут.");
     }
 }
 
-// Експорт (Кнопка)
-async function exportRoute() {
-    const payload = waypoints.map(p => ({ latitude: p.lat, longitude: p.lng }));
-    // Логіка POST запиту на /api/route/export і скачування файлу
+function makeFileName() {
+    let finalFileName;
+    const titleInput = document.getElementById('route-title-input');
+
+    // 1. Спочатку перевіряємо введення користувача
+    if (titleInput && titleInput.value.trim() !== "") {
+        let customName = titleInput.value.trim();
+        // "Санітизація" (заміна заборонених символів на підкреслення)
+        finalFileName = customName.replace(/[\\/:*?"<>|]/g, '_');
+    } else {
+        // 2. Генеруємо дефолтну назву ТІЛЬКИ якщо поле порожнє
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        finalFileName = `map_${year}.${month}.${day}`;
+    }
+
+    // 3. Гарантуємо розширення .gpx
+    if (!finalFileName.toLowerCase().endsWith('.gpx')) {
+        finalFileName += '.gpx';
+    }
+    return finalFileName;
+}
+
+// ==========================================
+// 6. MAP VISUALIZATION & INTERACTION
+// ==========================================
+
+function drawRoute(data) {
+    clearRouteLayer();
+
+    if (data.trackPoints && data.trackPoints.length > 0) {
+        const latLngs = data.trackPoints.map(p => [p.latitude, p.longitude]);
+
+        routeLayer = L.polyline(latLngs, { color: 'blue', weight: 5, opacity: 0.7 }).addTo(map);
+        map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+
+        updateRouteInfo(data.distanceMeters, data.durationSeconds);
+        attachRouteEvents(routeLayer);
+    }
+}
+
+function clearRouteLayer() {
+    if (routeLayer) map.removeLayer(routeLayer);
+}
+
+function updateRouteInfo(distanceMeters, durationSeconds) {
+    const distanceKm = (distanceMeters / 1000).toFixed(2);
+
+    // --- ЛОГІКА ФОРМАТУВАННЯ ЧАСУ ---
+    const totalMinutes = Math.round(durationSeconds / 60);
+    let durationText;
+
+    if (totalMinutes >= 60) {
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+
+        if (minutes === 0) {
+            durationText = `${hours} год.`;
+        } else {
+            durationText = `${hours} год. ${minutes} хв.`;
+        }
+    } else {
+        durationText = `${totalMinutes} хв.`;
+    }
+    // --------------------------------
+
+    document.getElementById('route-info').innerHTML = `
+        <div style="margin-top: 10px; padding: 10px; background: #e9ecef; border-radius: 5px;">
+            <strong>Відстань:</strong> ${distanceKm} км<br>
+            <strong>Час:</strong> ${durationText}
+        </div>
+    `;
+}
+
+function attachRouteEvents(polyline) {
+    polyline.on('mouseover', function() { this.setStyle({ weight: 8, cursor: 'pointer' }); });
+    polyline.on('mouseout', function() { this.setStyle({ weight: 5 }); });
+
+    // Клік по лінії створює нову точку (Silent Mode)
+    polyline.on('click', function(e) {
+        L.DomEvent.stopPropagation(e);
+        const insertIndex = findBestInsertIndex(e.latlng);
+        addWaypoint(e.latlng.lat, e.latlng.lng, insertIndex, true); // true = silent
+    });
+}
+
+function findBestInsertIndex(clickLatLng) {
+    if (waypoints.length < 2) return waypoints.length;
+    let minDistance = Infinity;
+    let bestIndex = 1;
+
+    for (let i = 0; i < waypoints.length - 1; i++) {
+        const p1 = L.latLng(waypoints[i].lat, waypoints[i].lng);
+        const p2 = L.latLng(waypoints[i+1].lat, waypoints[i+1].lng);
+
+        const distToP1 = clickLatLng.distanceTo(p1);
+        const distToP2 = clickLatLng.distanceTo(p2);
+        const segmentLength = p1.distanceTo(p2);
+
+        const detour = (distToP1 + distToP2) - segmentLength;
+
+        if (detour < minDistance) {
+            minDistance = detour;
+            bestIndex = i + 1;
+        }
+    }
+    return bestIndex;
+}
+
+// ==========================================
+// 7. UTILITIES & HELPERS
+// ==========================================
+
+function createNumberedIcon(number) {
+    return L.divIcon({
+        className: 'custom-marker-icon',
+        html: `<div class="marker-circle">${number}</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    });
+}
+
+function generateCacheKey(points) {
+    return points.map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`).join('|');
 }

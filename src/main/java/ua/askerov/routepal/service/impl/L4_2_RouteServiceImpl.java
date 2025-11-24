@@ -1,9 +1,9 @@
 package ua.askerov.routepal.service.impl;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import ua.askerov.routepal.config.OrsConfigProperties;
 import ua.askerov.routepal.model.RouteResponseDTO;
 import ua.askerov.routepal.model.Waypoint;
 import ua.askerov.routepal.service.RouteService;
@@ -18,14 +18,12 @@ public class L4_2_RouteServiceImpl implements RouteService {
     private final String orsProfile;
     private final WebClient webClient;
 
-    public L4_2_RouteServiceImpl(@Value("${ors.api.url}") String orsUrl,
-                                 @Value("${ors.api.key}") String orsApiKey,
-                                 @Value("${ors.profile}") String orsProfile) {
+    public L4_2_RouteServiceImpl(OrsConfigProperties orsConfig) {
+        this.orsProfile = orsConfig.getProfile();
 
-        this.orsProfile = orsProfile;
         this.webClient = WebClient.builder()
-                .baseUrl(orsUrl) // https://api.openrouteservice.org/v2/directions
-                .defaultHeader("Authorization", orsApiKey)
+                .baseUrl(orsConfig.getApi().getUrl())
+                .defaultHeader("Authorization", orsConfig.getApi().getKey())
                 .defaultHeader("Accept", "application/json, application/geo+json")
                 .defaultHeader("Content-Type", "application/json")
                 .build();

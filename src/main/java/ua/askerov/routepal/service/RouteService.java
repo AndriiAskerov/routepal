@@ -5,7 +5,6 @@ import ua.askerov.routepal.model.Waypoint;
 
 import java.util.List;
 
-// Інтерфейс визначає, що повинен робити наш сервіс
 public interface RouteService {
     // Метод, який буде взаємодіяти з зовнішнім API
     RouteResponseDTO calculateRoute(List<Waypoint> waypoints);

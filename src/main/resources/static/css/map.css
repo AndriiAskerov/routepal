@@ -1,11 +1,259 @@
-body { margin: 0; height: 100vh; display: flex; flex-direction: column; }
-.container { display: flex; flex: 1; height: 100%; }
-.sidebar { width: 350px; background: #fff; padding: 10px; overflow-y: auto; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1000; display: flex; flex-direction: column; }
-#map { flex: 1; }
+/* ==========================================
+   1. MAIN LAYOUT
+   ========================================== */
+body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
 
-/* Стилі списку */
-.waypoint-item { background: #f8f9fa; border: 1px solid #ddd; padding: 10px; margin-bottom: 5px; cursor: grab; display: flex; align-items: center; justify-content: space-between; }
-.waypoint-item:active { cursor: grabbing; }
-.waypoint-name { flex-grow: 1; margin-left: 10px; font-weight: bold; }
-.btn { padding: 8px 12px; margin: 5px 0; cursor: pointer; width: 100%; }
-.btn-primary { background-color: #007bff; color: white; border: none; }
+.container {
+    display: flex;
+    flex: 1;
+    height: 100%;
+}
+
+.sidebar {
+    width: 350px;
+    background: #fff;
+    padding: 10px;
+    overflow-y: auto;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+#map {
+    flex: 1;
+}
+
+/* ==========================================
+   2. SIDEBAR (Title & Waypoint list items)
+   ========================================== */
+/* --- ЗАГОЛОВОК МАРШРУТУ (Стиль під кнопки) --- */
+.route-title-input {
+    /* Розміри та відступи (як у кнопок) */
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px; /* Трохи вищий за звичайну кнопку для ваги заголовка */
+    margin-bottom: 15px;
+
+    /* Стиль "плоский", як у .btn */
+    background-color: #f8f9fa; /* Світлий фон, як у точок списку */
+    border: 1px solid #ddd;    /* Тонка рамка для контуру */
+    border-radius: 5px;        /* Такий самий радіус, як у кнопок .btn */
+
+    /* Текст */
+    font-size: 1.2rem; /* Більший шрифт */
+    font-weight: bold;
+    text-align: center;
+    color: #333;
+
+    /* Анімація */
+    transition: all 0.2s ease-in-out;
+}
+
+/* Ефект при наведенні (як у кнопок) */
+.route-title-input:hover {
+    background-color: #e2e6ea; /* Трохи темніший сірий */
+    border-color: #adb5bd;
+    cursor: text;
+}
+
+/* Ефект фокусу (редагування) */
+.route-title-input:focus {
+    background-color: #fff; /* Білий фон для вводу */
+    border-color: #007bff;  /* Синя рамка (основний колір) */
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); /* Легке синє світіння */
+}
+
+/* Плейсхолдер */
+.route-title-input::placeholder {
+    color: #6c757d;
+    opacity: 0.8;
+    font-weight: normal;
+}
+
+/* Базовий стиль елемента списку */
+.waypoint-item {
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    /* Логіка злиття списку */
+    margin-bottom: 0;
+    border-bottom: none; /* Уникаємо подвійних кордонів */
+    border-radius: 0;    /* За замовчуванням квадратні */
+
+    /* UX */
+    user-select: none;
+    -webkit-user-select: none;
+    transition: border-radius 0.3s ease, background-color 0.2s;
+}
+
+/* Динамічне заокруглення: Перший елемент */
+.waypoint-item:first-child {
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid #ddd;
+}
+
+/* Динамічне заокруглення: Останній елемент */
+.waypoint-item:last-child {
+    border-radius: 0 0 20px 20px;
+    border-bottom: 1px solid #ddd; /* Повертаємо нижній кордон */
+    margin-bottom: 10px;
+}
+
+/* Динамічне заокруглення: Якщо елемент єдиний */
+.waypoint-item:first-child:last-child {
+    border-radius: 20px;
+}
+
+/* Інтерактивність */
+.waypoint-item:hover {
+    background-color: #fff;
+}
+
+.waypoint-item:active {
+    cursor: grabbing;
+    background-color: #e9ecef;
+    z-index: 1;
+}
+
+/* Внутрішні елементи: Номер */
+.waypoint-number {
+    font-weight: bold;
+    color: #007bff;
+    min-width: 20px;
+}
+
+/* Внутрішні елементи: Поле вводу назви */
+.waypoint-name-input {
+    flex-grow: 1;
+    margin: 0 10px;
+    padding: 5px;
+    border: 1px solid transparent;
+    background: transparent;
+    font-weight: 500;
+    border-radius: 4px;
+
+    /* Дозволяємо виділяти текст всередині інпуту */
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.waypoint-name-input:focus {
+    border-color: #007bff;
+    background: white;
+    outline: none;
+}
+
+/* ==========================================
+   3. UI CONTROLS & BUTTONS
+   ========================================== */
+.btn {
+    padding: 8px 12px;
+    margin: 5px 0;
+    cursor: pointer;
+    width: 100%;
+    border-radius: 5px;
+    transition: background-color 0.2s;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+    border: none;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+/* ==========================================
+   4. MAP MARKERS (Custom Icons)
+   ========================================== */
+.custom-marker-icon {
+    background: none;
+    border: none;
+}
+
+.marker-circle {
+    width: 30px;
+    height: 30px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+
+    /* Центрування цифри */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+    font-weight: bold;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.marker-circle:hover {
+    background-color: #0056b3;
+    transform: scale(1.1);
+}
+
+/* ==========================================
+   5. DRAG & DROP (SortableJS)
+   ========================================== */
+
+/* 1. Елемент під курсором (Clone) */
+/* Робимо його невидимим, щоб не було "сірої картинки" */
+.sortable-drag-clone {
+    opacity: 0 !important; /* Повна прозорість */
+    pointer-events: none;  /* Пропускаємо кліки */
+    cursor: grabbing !important;
+}
+
+/* 2. Місце вставки (Placeholder - пунктирна рамка) */
+.sortable-placeholder {
+    background-color: #e9ecef;
+    border: 2px dashed #007bff !important;
+    opacity: 0.5;
+
+    /* За замовчуванням (середина) - без заокруглень */
+    border-radius: 0 !important;
+
+    /* Прибираємо контент всередині плейсхолдера, щоб лишилась тільки рамка */
+    color: transparent;
+    visibility: visible !important;
+}
+
+/* Динамічне заокруглення ПЛЕЙСХОЛДЕРА */
+
+/* Якщо вставляємо на перше місце */
+.sortable-placeholder:first-child {
+    border-radius: 20px 20px 0 0 !important;
+}
+
+/* Якщо вставляємо на останнє місце */
+.sortable-placeholder:last-child {
+    border-radius: 0 0 20px 20px !important;
+}
+
+/* Якщо список порожній або елемент один */
+.sortable-placeholder:first-child:last-child {
+    border-radius: 20px !important;
+}
+
+/* 3. Курсор під час перетягування */
+body.sortable-fallback-cursor_grabbing * {
+    cursor: grabbing !important;
+}

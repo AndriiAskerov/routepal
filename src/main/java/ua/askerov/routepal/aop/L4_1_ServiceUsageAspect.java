@@ -18,14 +18,13 @@ public class L4_1_ServiceUsageAspect {
         this.auditor = auditor;
     }
 
-    // методи, що відстежується
+    // --- 1. Аудит розрахунку маршруту (як було) ---
     @Pointcut("execution(* ua.askerov.routepal.service.impl.L4_2_RouteServiceImpl.calculateRoute(..))")
-    public void routeServiceCall() {
-    }
+    public void routeServiceCall() {}
 
-    // відповідні методи, що виконується навколо тих, що відстежуються
+    // відповідний метод, що виконується навколо того, що відстежується
     @Around("routeServiceCall()")
-    public Object auditApiCall(ProceedingJoinPoint joinPoint) throws Throwable {
+    public Object auditRoute(ProceedingJoinPoint joinPoint) throws Throwable {
         if (!auditor.tryIncrementDirectionsCounter()) {
             // інформуємо клієнта, що ліміт вичерпано
             System.err.println("Перевищено ліміт запитів"); // DBG вивід на консоль TODO логування
@@ -34,6 +33,22 @@ public class L4_1_ServiceUsageAspect {
                     .message(this.getClass().getSimpleName() + "Денний ліміт 'v2/directions вичерпано'. Спробуйте завтра").build();
         }
         // виклик самого методу (ліміт не вичерпано)
+        return joinPoint.proceed();
+    }
+
+    // --- 2. НОВЕ: Аудит експорту (цілимося в ExportService) ---
+    // Можна вказати інтерфейс або реалізацію
+    @Pointcut("execution(* ua.askerov.routepal.service.ExportService.exportRoute(..))")
+    public void exportServiceCall() {}
+
+    @Around("exportServiceCall()")
+    public Object auditExport(ProceedingJoinPoint joinPoint) throws Throwable {
+        // Перевіряємо ІНШИЙ лічильник
+        if (!auditor.tryIncrementExportCounter()) {
+            System.err.println("Ліміт Export вичерпано");
+            // Кидаємо виняток, який перехопить контролер
+            throw new RuntimeException("LIMIT_EXCEEDED");
+        }
         return joinPoint.proceed();
     }
 }

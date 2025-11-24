@@ -6,6 +6,7 @@ import jakarta.annotation.PreDestroy;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import ua.askerov.routepal.config.OrsConfigProperties;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,11 +34,9 @@ public class ApiUsageAuditor {
 
 
     // Впорскуємо ліміт з application.properties
-    public ApiUsageAuditor(
-            @Value("${ors.api.limit.directions.daily:2000}") long directionsLimit,
-            @Value("${ors.api.limit.export.daily:100}") long exportLimit) {
-        DIRECTIONS_LIMIT = directionsLimit;
-        EXPORT_LIMIT = exportLimit;
+    public ApiUsageAuditor(OrsConfigProperties orsConfig) {
+        this.DIRECTIONS_LIMIT = orsConfig.getApi().getLimit().getDirections().getDaily();
+        this.EXPORT_LIMIT = orsConfig.getApi().getLimit().getExport().getDaily();
         this.objectMapper = new ObjectMapper();
     }
 

@@ -24,7 +24,10 @@
 
 <div class="container">
   <div class="sidebar">
-    <h2>Маршрут</h2>
+    <input type="text"
+           id="route-title-input"
+           class="route-title-input"
+           placeholder="Маршрут">
 
     <div id="waypoints-list" class="list-group">
     </div>
@@ -39,6 +42,25 @@
 
   <div id="map"></div>
 </div>
+
+<template id="waypoint-template">
+  <div class="waypoint-item">
+    <div style="display:flex; align-items:center; width:100%;">
+      <i class="fas fa-bars handle" style="cursor: grab; color: #aaa; margin-right: 8px; padding: 5px;"></i>
+
+      <span class="waypoint-number" style="margin-right: 5px; font-weight:bold; color:#007bff;"></span>
+
+      <input type="text"
+             class="waypoint-name-input"
+             placeholder="Назва"
+             style="flex-grow:1; border:1px solid transparent; background:transparent;">
+
+      <button class="btn-delete" style="color:#dc3545; border:none; background:none; cursor:pointer; padding:0 5px;">
+        <i class="fas fa-trash-alt"></i>
+      </button>
+    </div>
+  </div>
+</template>
 
 </body>
 </html>
