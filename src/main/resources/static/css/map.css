@@ -15,15 +15,58 @@ body {
     height: 100%;
 }
 
+/* === SIDEBAR LAYOUT === */
 .sidebar {
     width: 350px;
     background: #fff;
-    padding: 10px;
-    overflow-y: auto;
     box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
     z-index: 1000;
+
+    /* Flex-контейнер на всю висоту вікна */
     display: flex;
     flex-direction: column;
+    height: 100vh; /* Важливо! */
+    overflow: hidden; /* Сам сайдбар не скролиться */
+}
+
+/* 1. ХЕДЕР (не стискається) */
+.sidebar-header {
+    flex-shrink: 0;
+    padding: 10px;
+    background: #fff;
+    z-index: 10;
+    border-bottom: 1px solid #eee; /* Візуальне відділення від списку */
+}
+
+/* Стиль для блоку інформації (компактніший) */
+#route-info {
+    margin-top: 5px;
+    font-size: 0.9rem;
+    color: #555;
+    background: #f1f3f5;
+    padding: 8px;
+    border-radius: 5px;
+}
+
+/* 2. СПИСОК ТОЧОК (скролиться) */
+#waypoints-list {
+    flex-grow: 1;      /* Займає все доступне місце */
+    overflow-y: auto;  /* Скрол з'являється тільки тут */
+    padding: 10px;
+    min-height: 0;     /* Важливо для Firefox/Chrome flex bug */
+}
+
+.controls {
+    margin-top: auto;
+    flex-shrink: 0;
+    padding: 10px;
+    background: #fff;
+    border-top: 1px solid #eee;
+}
+
+/* Інші елементи не стискаються */
+.controls, #route-info, .route-title-input {
+    flex-shrink: 0;
 }
 
 #map {
@@ -306,4 +349,90 @@ body.sortable-fallback-cursor_grabbing * {
     color: black;
     text-decoration: none;
     cursor: pointer;
+}
+
+/* ==========================================
+   7. ELEVATION GRAPH (Plot view window)
+   ========================================== */
+.elevation-panel {
+    background: #fff;
+    border-top: 1px solid #ddd;
+    flex-shrink: 0; /* Не даємо йому зникнути */
+
+    display: flex;
+    flex-direction: column;
+    transition: height 0.3s ease; /* Анімація висоти */
+    width: 100%;
+}
+
+/* Стан 1: Закрито (Тільки заголовок) */
+.elevation-panel {
+    height: 40px;
+}
+
+/* Стан 2: Відкрито в сайдбарі */
+.elevation-panel.open {
+    height: 250px;
+    border-top: 2px solid #007bff;
+}
+
+/* Стан 3: Розширено на весь екран */
+.elevation-panel.expanded {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100vw;
+    height: 40vh;
+    z-index: 2000;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+    border-top: 3px solid #007bff;
+}
+
+/* Хедер панелі */
+.elevation-header {
+    height: 40px;
+    background: #f8f9fa;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 15px;
+    font-weight: bold;
+    flex-shrink: 0;
+}
+
+.elevation-header:hover {
+    background: #e9ecef;
+}
+
+/* Контент (графік) */
+.elevation-content {
+    flex: 1;
+    display: none;
+    position: relative;
+    overflow: hidden; /* Важливо */
+}
+
+.elevation-panel.open .elevation-content,
+.elevation-panel.expanded .elevation-content {
+    display: block;
+}
+
+.chart-container {
+    position: relative;
+    width: 100%;
+    height: 100%; /* Контейнер займає весь простір контенту */
+    overflow: hidden;
+}
+
+.btn-expand {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(255,255,255,0.8);
+    border: 1px solid #ccc;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 3px;
+    z-index: 10;
 }

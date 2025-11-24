@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ua.askerov.routepal.model.RouteResponseDTO;
 import ua.askerov.routepal.model.Waypoint;
+import ua.askerov.routepal.service.ElevationService;
 import ua.askerov.routepal.service.impl.ExportServiceImpl;
 import ua.askerov.routepal.service.impl.RouteServiceImpl;
 
@@ -21,15 +22,17 @@ public class RouteController {
 
     private final RouteServiceImpl routeService; // Ін'єкція сервісу
     private final ExportServiceImpl exportService;
+    private final ElevationService elevationService;
 
     // Тимчасове сховище маршрутів: ID -> Список точок
     // У реальному проді тут потрібен Redis або БД з автовидаленням, але для тесту Map підійде.
     private final Map<String, List<Waypoint>> sharedRoutes = new ConcurrentHashMap<>();
 
 
-    public RouteController(RouteServiceImpl routeService, ExportServiceImpl exportService) {
+    public RouteController(RouteServiceImpl routeService, ExportServiceImpl exportService, ElevationService elevationService) {
         this.routeService = routeService;
         this.exportService = exportService;
+        this.elevationService = elevationService;
     }
 
     @PostMapping("/calculate")
@@ -64,9 +67,6 @@ public class RouteController {
         }
     }
 
-    // --- НОВІ МЕТОДИ ДЛЯ QR ---
-
-    // 1. Зберегти маршрут і отримати ID
     @PostMapping("/share")
     public ResponseEntity<Map<String, String>> shareRoute(@RequestBody List<Waypoint> waypoints) {
         String id = UUID.randomUUID().toString();
@@ -74,7 +74,6 @@ public class RouteController {
         return ResponseEntity.ok(Map.of("id", id));
     }
 
-    // 2. Завантажити файл за ID (GET запит для мобільного)
     @GetMapping("/download/{id}")
     public ResponseEntity<?> downloadSharedRoute(@PathVariable String id) {
         List<Waypoint> waypoints = sharedRoutes.get(id);
@@ -94,4 +93,15 @@ public class RouteController {
         }
     }
 
+    @PostMapping("/elevation")
+    public ResponseEntity<?> getElevation(@RequestBody List<Waypoint> trackPoints) {
+        try {
+            // Тут Аспект перехопить виклик через інтерфейс (якщо налаштуєте)
+            // Або додайте ручну перевірку, якщо Аспект налаштований тільки на RouteService
+            List<Waypoint> enrichedPoints = elevationService.getElevationForTrack(trackPoints);
+            return ResponseEntity.ok(enrichedPoints);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
+        }
+    }
 }

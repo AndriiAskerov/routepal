@@ -36,8 +36,6 @@ public class ServiceUsageAspect {
         return joinPoint.proceed();
     }
 
-    // --- 2. НОВЕ: Аудит експорту (цілимося в ExportService) ---
-    // Можна вказати інтерфейс або реалізацію
     @Pointcut("execution(* ua.askerov.routepal.service.ExportService.exportRoute(..))")
     public void exportServiceCall() {}
 
@@ -47,6 +45,17 @@ public class ServiceUsageAspect {
         if (!auditor.tryIncrementExportCounter()) {
             System.err.println("Ліміт Export вичерпано");
             // Кидаємо виняток, який перехопить контролер
+            throw new RuntimeException("LIMIT_EXCEEDED");
+        }
+        return joinPoint.proceed();
+    }
+
+    @Pointcut("execution(* ua.askerov.routepal.service.ElevationService.getElevationForTrack(..))")
+    public void elevationServiceCall() {}
+
+    @Around("elevationServiceCall()")
+    public Object auditElevation(ProceedingJoinPoint joinPoint) throws Throwable {
+        if (!auditor.tryIncrementElevationCounter()) {
             throw new RuntimeException("LIMIT_EXCEEDED");
         }
         return joinPoint.proceed();

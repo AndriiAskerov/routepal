@@ -10,6 +10,11 @@ let routeLayer = null;
 let nextId = 1;
 let fetchTimeout = null;
 
+let currentTrackPoints = []; // Точки поточного маршруту (з бекенду)
+let elevationCache = new Map(); // Кеш: 'lat,lng|lat,lng...' -> [ElevationData]
+let elevationChart = null; // Об'єкт Chart.js
+let isElevationPanelOpen = false; // Прапорець шторки (Вдкр./Зкрт.)
+
 // ==========================================
 // 2. INITIALIZATION (SortableJS & Events)
 // ==========================================
@@ -177,6 +182,73 @@ function setupMarkerEvents(marker, pointObj) {
     });
 }
 
+// === Elevation graph UI Controls ===
+function toggleElevationPanel() {
+    const panel = document.getElementById('elevation-panel');
+    const chevron = document.getElementById('elevation-chevron');
+    const expandIcon = document.getElementById('expand-icon');
+
+    // ЛОГІКА: Якщо панель РОЗШИРЕНА (Expanded) -> Згортаємо повністю (до стану 1)
+    if (panel.classList.contains('expanded')) {
+        panel.classList.remove('expanded');
+        panel.classList.remove('open'); // Закриваємо повністю
+        isElevationPanelOpen = false;
+
+        chevron.className = 'fas fa-chevron-up';
+        expandIcon.className = 'fas fa-expand';
+
+        // Фікс: іноді графік ламається при різкому зникненні, але тут display:none врятує
+        return;
+    }
+
+    // Звичайна логіка (Sidebar Open <-> Closed)
+    isElevationPanelOpen = !isElevationPanelOpen;
+
+    if (isElevationPanelOpen) {
+        panel.classList.add('open');
+        chevron.className = 'fas fa-chevron-down';
+
+        // Важливо: даємо браузеру час відмалювати анімацію CSS (0.3s), потім ресайзимо графік
+        setTimeout(() => {
+            fetchAndRenderElevation();
+            if (elevationChart) elevationChart.resize();
+        }, 300);
+
+    } else {
+        panel.classList.remove('open');
+        chevron.className = 'fas fa-chevron-up';
+    }
+}
+
+function toggleExpandChart(event) {
+    if (event) event.stopPropagation();
+
+    const panel = document.getElementById('elevation-panel');
+    const icon = document.getElementById('expand-icon');
+    const chevron = document.getElementById('elevation-chevron');
+
+    panel.classList.toggle('expanded');
+
+    if (panel.classList.contains('expanded')) {
+        // Якщо розширили - це автоматично "Open"
+        isElevationPanelOpen = true;
+        panel.classList.add('open');
+        chevron.className = 'fas fa-chevron-down'; // Шеврон має дивитись вниз (типу "згорнути")
+        icon.className = 'fas fa-compress';
+    } else {
+        // Якщо згорнули з повного екрану - повертаємось у стан 2 (Open in Sidebar)
+        // Або можна в стан 1, як ви хочете?
+        // Зазвичай кнопка "Expand" працює як перемикач розміру.
+        // Нехай лишається Open in Sidebar.
+        icon.className = 'fas fa-expand';
+    }
+
+    // КРИТИЧНО: Примусовий ресайз після анімації
+    setTimeout(() => {
+        if (elevationChart) elevationChart.resize();
+    }, 310);
+}
+
 // ==========================================
 // 5. API INTERACTION (Fetch, Debounce, Cache)
 // ==========================================
@@ -309,6 +381,12 @@ function drawRoute(data) {
 
         updateRouteInfo(data.distanceMeters, data.durationSeconds);
         attachRouteEvents(routeLayer);
+
+        // 1. Показуємо панель висот (бо маршрут є)
+        document.getElementById('elevation-panel').style.display = 'flex';
+
+        // 2. Оновлюємо графік (якщо панель відкрита)
+        updateElevationGraph(data.trackPoints);
     }
 }
 
@@ -467,5 +545,112 @@ window.onclick = function(event) {
     const modal = document.getElementById('qrModal');
     if (event.target === modal) {
         modal.style.display = "none";
+    }
+}
+
+// ==========================================
+// 9. ELEVATION GRAPH LOGIC
+// ==========================================
+// === Функція побудови графіка ===
+function updateElevationGraph(trackPoints) {
+    currentTrackPoints = trackPoints; // Запам'ятовуємо трек
+
+    // Якщо панель закрита - нічого не робимо (економимо квоту)
+    if (!isElevationPanelOpen) return;
+
+    fetchAndRenderElevation();
+}
+
+// === Отримання даних ===
+async function fetchAndRenderElevation() {
+    if (!currentTrackPoints || currentTrackPoints.length === 0) return;
+
+    // Генерація ключа для кешу (беремо першу, середню і останню точку для швидкості, або хеш)
+    // Для простоти візьмемо стрічку з перших 50 символів координат
+    const cacheKey = currentTrackPoints.length + "_" + currentTrackPoints[0].latitude;
+
+    let elevationData;
+
+    if (elevationCache.has(cacheKey)) {
+        elevationData = elevationCache.get(cacheKey);
+    } else {
+        // Запит на сервер
+        try {
+            const response = await fetch('/api/route/elevation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(currentTrackPoints)
+            });
+
+            if (!response.ok) throw new Error("Elevation limit exceeded");
+
+            elevationData = await response.json();
+            elevationCache.set(cacheKey, elevationData); // Зберігаємо в кеш
+        } catch (e) {
+            console.error(e);
+            return; // Не малюємо
+        }
+    }
+
+    renderChart(elevationData);
+}
+
+// === Малювання Chart.js ===
+function renderChart(points) {
+    const ctx = document.getElementById('elevationChart').getContext('2d');
+
+    // 1. Підготовка даних (Дистанція по осі X, Висота по Y)
+    // Нам треба порахувати кумулятивну відстань
+    const labels = [];
+    const data = [];
+    let totalDist = 0;
+
+    for (let i = 0; i < points.length; i++) {
+        if (i > 0) {
+            // Формула Haversine або проста евклідова для малих відстаней
+            // Тут краще взяти distanceMeters з бекенду, але для графіка приблизно порахуємо
+            const p1 = L.latLng(points[i-1].latitude, points[i-1].longitude);
+            const p2 = L.latLng(points[i].latitude, points[i].longitude);
+            totalDist += p1.distanceTo(p2);
+        }
+
+        // Додаємо точку кожні ~100 метрів або всі точки, якщо їх мало
+        // Щоб не перевантажувати графік
+        labels.push((totalDist / 1000).toFixed(1)); // км
+        data.push(points[i].elevation);
+    }
+
+    // 2. Створення/Оновлення чарту
+    if (elevationChart) {
+        elevationChart.data.labels = labels;
+        elevationChart.data.datasets[0].data = data;
+        elevationChart.update();
+    } else {
+        elevationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Висота (м)',
+                    data: data,
+                    borderColor: '#007bff',
+                    backgroundColor: 'rgba(0, 123, 255, 0.2)',
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false, // <--- ВАЖЛИВО: Запобігає сплющенню/розтягуванню
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { ticks: { maxTicksLimit: 10 } }, // Щоб не було мішанини підписів
+                    y: { beginAtZero: false }
+                },
+                plugins: { legend: { display: false } } // Економимо місце
+            }
+        });
     }
 }

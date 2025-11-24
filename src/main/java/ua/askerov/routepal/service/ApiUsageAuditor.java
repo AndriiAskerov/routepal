@@ -3,7 +3,6 @@ package ua.askerov.routepal.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import ua.askerov.routepal.config.OrsConfigProperties;
@@ -20,23 +19,21 @@ public class ApiUsageAuditor {
     // --- ЛІМІТИ ---
     private final long DIRECTIONS_LIMIT;
     private final long EXPORT_LIMIT;
+    private final long ELEVATION_LINE_LIMIT;
 
     // --- ЛІЧИЛЬНИКИ (Атомарні для безпеки потоків) ---
     private final AtomicLong directionsCount = new AtomicLong(0);
     private final AtomicLong exportCount = new AtomicLong(0);
-
-    private LocalDate lastResetDate = LocalDate.now();
-
+    private final AtomicLong elevationLineCount = new AtomicLong(0);
     // -- JSON ---
     private final ObjectMapper objectMapper;
     private final File statsFile = new File("src/main/resources/ors-api-stats.json");
+    private LocalDate lastResetDate = LocalDate.now();
 
-
-
-    // Впорскуємо ліміт з application.properties
     public ApiUsageAuditor(OrsConfigProperties orsConfig) {
         this.DIRECTIONS_LIMIT = orsConfig.getApi().getLimit().getDirections().getDaily();
         this.EXPORT_LIMIT = orsConfig.getApi().getLimit().getExport().getDaily();
+        this.ELEVATION_LINE_LIMIT = orsConfig.getApi().getLimit().getElevation().getLine().getDaily();
         this.objectMapper = new ObjectMapper();
     }
 
@@ -47,6 +44,7 @@ public class ApiUsageAuditor {
             lastResetDate = LocalDate.now();
             directionsCount.set(0);
             exportCount.set(0);
+            elevationLineCount.set(0);
             persistStats();
         }
     }
@@ -89,6 +87,10 @@ public class ApiUsageAuditor {
         return tryIncrementCounter(exportCount, EXPORT_LIMIT);
     }
 
+    public boolean tryIncrementElevationCounter() {
+        return tryIncrementCounter(elevationLineCount, ELEVATION_LINE_LIMIT);
+    }
+
     @PostConstruct // Викликається під час запуску сервера
     public void loadStats() {
         if (statsFile.exists()) {
@@ -101,12 +103,13 @@ public class ApiUsageAuditor {
                     this.lastResetDate = savedDate;
                     this.directionsCount.set(((Number) stats.get("directionsCount")).longValue());
                     this.exportCount.set(((Number) stats.get("exportCount")).longValue());
+                    this.elevationLineCount.set(((Number) stats.get("elevationLineCount")).longValue());
                     System.out.printf("""
                             Статистика API відновлена:
                             \t- Directions: %d/%d
                             \t- Export: %d/%d
-                            """, directionsCount.get(), DIRECTIONS_LIMIT,
-                            exportCount.get(), EXPORT_LIMIT);
+                            \t- Elevation Line: %d/%d
+                            """, directionsCount.get(), DIRECTIONS_LIMIT, exportCount.get(), EXPORT_LIMIT, elevationLineCount.get(), ELEVATION_LINE_LIMIT);
                 } else {
                     // Якщо файл за вчора, просто починаємо з нуля
                     System.out.println("Статистика API застаріла, починаємо з нуля");
@@ -123,11 +126,7 @@ public class ApiUsageAuditor {
     public void persistStats() {
         try {
             // Зберігаємо нові лічильники
-            Map<String, Object> stats = Map.of(
-                    "date", lastResetDate.toString(),
-                    "directionsCount", directionsCount.get(),
-                    "exportCount", exportCount.get()
-            );
+            Map<String, Object> stats = Map.of("date", lastResetDate.toString(), "directionsCount", directionsCount.get(), "exportCount", exportCount.get(), "elevationLineCount", elevationLineCount.get());
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(statsFile, stats);
         } catch (IOException e) {
             System.err.println("Не вдалося зберегти статистику API: " + e.getMessage());

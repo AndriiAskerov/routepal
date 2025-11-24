@@ -18,6 +18,8 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <link rel="stylesheet" href="/css/map.css">
   <script src="/js/map.js" defer></script>
 
@@ -26,10 +28,10 @@
 
 <div class="container">
   <div class="sidebar">
-    <input type="text"
-           id="route-title-input"
-           class="route-title-input"
-           placeholder="Маршрут">
+
+    <div class="sidebar-header">
+      <input type="text" id="route-title-input" class="route-title-input" placeholder="Маршрут">
+      <div id="route-info"></div> </div>
 
     <div id="waypoints-list" class="list-group">
     </div>
@@ -38,13 +40,25 @@
       <button onclick="addPointMode()" class="btn"><i class="fas fa-plus"></i> Додати точку</button>
       <button onclick="reverseRoute()" class="btn"><i class="fas fa-exchange-alt"></i> Зворотній</button>
       <button onclick="exportRoute()" class="btn btn-primary"><i class="fas fa-file-export"></i> Експорт GPX</button>
-      <button onclick="shareRouteQr()" class="btn btn-primary" style="background-color: #28a745;">
-        <i class="fas fa-qrcode"></i> QR Експорт
-      </button>
     </div>
-    <div id="route-info"></div>
-  </div>
 
+    <div id="elevation-panel" class="elevation-panel" style="display: none;">
+      <div class="elevation-header" onclick="toggleElevationPanel()">
+        <span><i class="fas fa-chart-area"></i> Графік висот</span>
+        <i id="elevation-chevron" class="fas fa-chevron-up"></i>
+      </div>
+
+      <div class="elevation-content">
+        <div class="chart-container">
+          <canvas id="elevationChart"></canvas>
+        </div>
+        <button onclick="toggleExpandChart(event)" class="btn-expand" title="Розгорнути">
+          <i id="expand-icon" class="fas fa-expand"></i>
+        </button>
+      </div>
+    </div>
+
+  </div>
   <div id="map"></div>
 </div>
 
