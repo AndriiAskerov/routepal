@@ -1,0 +1,90 @@
+/*
+ * sidebar.css
+ * Стилі для лівої панелі управління та списку точок.
+ */
+
+.sidebar {
+    width: 350px;
+    background: #fff;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.sidebar-header {
+    flex-shrink: 0;
+    padding: 15px;
+    background: #fff;
+    border-bottom: 1px solid #eee;
+}
+
+.route-title-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    font-size: 1.1rem;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+#route-info {
+    font-size: 0.9rem;
+    color: #666;
+    background: #f8f9fa;
+    padding: 8px;
+    border-radius: 4px;
+}
+
+#waypoints-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+/* Елемент списку точок */
+.waypoint-item {
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    margin-bottom: -1px; /* Щоб границі зливались */
+}
+
+.waypoint-item:first-child { border-radius: 5px 5px 0 0; }
+.waypoint-item:last-child { border-radius: 0 0 5px 5px; margin-bottom: 10px; }
+
+.waypoint-number {
+    font-weight: bold;
+    color: #007bff;
+    margin-right: 10px;
+    min-width: 20px;
+}
+
+.waypoint-name-input {
+    border: none;
+    background: transparent;
+    flex-grow: 1;
+    font-size: 0.95rem;
+}
+
+.waypoint-name-input:focus { outline: none; border-bottom: 1px solid #007bff; }
+
+.btn-delete {
+    color: #dc3545;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+}
+
+.controls {
+    padding: 10px;
+    border-top: 1px solid #eee;
+    background: #fff;
+    flex-shrink: 0;
+}

@@ -1,0 +1,82 @@
+/*
+ * components.css
+ * Загальні UI елементи: кнопки, маркери, модальні вікна.
+ */
+
+/* Кнопки */
+.btn {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.btn:hover { background: #e2e6ea; }
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.btn-primary:hover { background-color: #0056b3; }
+
+/* Маркери на карті */
+.custom-marker-icon { background: none; border: none; }
+
+.marker-circle {
+    width: 30px;
+    height: 30px;
+    background-color: #007bff;
+    color: white;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+/* SortableJS Ghost Classes */
+.sortable-drag-clone { opacity: 0 !important; }
+.sortable-placeholder {
+    background: #e9ecef;
+    border: 2px dashed #007bff;
+    opacity: 0.5;
+}
+
+/* Modal (QR Code) */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 3000;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    width: 300px;
+    position: relative;
+    margin: auto;
+    top: 20%;
+}
+.close-btn {
+    position: absolute;
+    right: 10px; top: 5px;
+    font-size: 24px;
+    cursor: pointer;
+}

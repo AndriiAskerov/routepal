@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import ua.askerov.routepal.model.ElevationResponseDTO;
 import ua.askerov.routepal.model.RouteResponseDTO;
 import ua.askerov.routepal.model.Waypoint;
 import ua.askerov.routepal.service.ElevationService;
@@ -96,10 +97,8 @@ public class RouteController {
     @PostMapping("/elevation")
     public ResponseEntity<?> getElevation(@RequestBody List<Waypoint> trackPoints) {
         try {
-            // Тут Аспект перехопить виклик через інтерфейс (якщо налаштуєте)
-            // Або додайте ручну перевірку, якщо Аспект налаштований тільки на RouteService
-            List<Waypoint> enrichedPoints = elevationService.getElevationForTrack(trackPoints);
-            return ResponseEntity.ok(enrichedPoints);
+            ElevationResponseDTO responseDTO = elevationService.getElevationForTrack(trackPoints);
+            return ResponseEntity.ok(responseDTO);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
         }

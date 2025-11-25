@@ -1,93 +1,106 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Карта - Route Pal</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-        crossorigin=""/>
+    <title>Карта - Route Pal</title>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-          crossorigin=""></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <link rel="stylesheet" href="/css/base.css">
+    <link rel="stylesheet" href="/css/sidebar.css">
+    <link rel="stylesheet" href="/css/elevation.css">
+    <link rel="stylesheet" href="/css/components.css">
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-  <link rel="stylesheet" href="/css/map.css">
-  <script src="/js/map.js" defer></script>
+    <script type="module" src="/js/main.js"></script>
 
 </head>
+
 <body>
 
 <div class="container">
-  <div class="sidebar">
+    <div class="sidebar">
 
-    <div class="sidebar-header">
-      <input type="text" id="route-title-input" class="route-title-input" placeholder="Маршрут">
-      <div id="route-info"></div> </div>
-
-    <div id="waypoints-list" class="list-group">
-    </div>
-
-    <div class="controls">
-      <button onclick="addPointMode()" class="btn"><i class="fas fa-plus"></i> Додати точку</button>
-      <button onclick="reverseRoute()" class="btn"><i class="fas fa-exchange-alt"></i> Зворотній</button>
-      <button onclick="exportRoute()" class="btn btn-primary"><i class="fas fa-file-export"></i> Експорт GPX</button>
-    </div>
-
-    <div id="elevation-panel" class="elevation-panel" style="display: none;">
-      <div class="elevation-header" onclick="toggleElevationPanel()">
-        <span><i class="fas fa-chart-area"></i> Графік висот</span>
-        <i id="elevation-chevron" class="fas fa-chevron-up"></i>
-      </div>
-
-      <div class="elevation-content">
-        <div class="chart-container">
-          <canvas id="elevationChart"></canvas>
+        <div class="sidebar-header">
+            <input type="text" id="route-title-input" class="route-title-input" placeholder="Маршрут">
+            <div id="route-info"></div>
         </div>
-        <button onclick="toggleExpandChart(event)" class="btn-expand" title="Розгорнути">
-          <i id="expand-icon" class="fas fa-expand"></i>
-        </button>
-      </div>
-    </div>
 
-  </div>
-  <div id="map"></div>
+        <div id="waypoints-list" class="list-group">
+        </div>
+
+        <div class="controls">
+            <button onclick="addPointMode()" class="btn"><i class="fas fa-plus"></i> Додати точку</button>
+            <button onclick="reverseRoute()" class="btn"><i class="fas fa-exchange-alt"></i> Зворотній</button>
+            <button onclick="shareRouteQr()" class="btn" style="background-color: #28a745; color: white;">
+                <i class="fas fa-qrcode"></i> QR Експорт
+            </button>
+            <button onclick="exportRoute()" class="btn btn-primary"><i class="fas fa-file-export"></i> Експорт GPX
+            </button>
+        </div>
+
+        <div id="elevation-panel" class="elevation-panel" style="display: none;">
+            <div class="elevation-header" onclick="toggleElevationPanel()">
+                <span><i class="fas fa-chart-area"></i> Графік висот</span>
+                <i id="elevation-chevron" class="fas fa-chevron-up"></i>
+            </div>
+
+            <div class="elevation-content">
+
+                <div class="chart-wrapper">
+                    <div class="chart-container">
+                        <canvas id="elevationChart"></canvas>
+                    </div>
+                    <button onclick="toggleExpandChart(event)" class="btn-expand">
+                        <i id="expand-icon" class="fas fa-expand"></i>
+                    </button>
+                </div>
+
+                <div class="climbs-list">
+                </div>
+            </div>
+        </div>
+
+    </div>
+    <div id="map"></div>
 </div>
 
 <template id="waypoint-template">
-  <div class="waypoint-item">
-    <div style="display:flex; align-items:center; width:100%;">
-      <i class="fas fa-bars handle" style="cursor: grab; color: #aaa; margin-right: 8px; padding: 5px;"></i>
+    <div class="waypoint-item">
+        <div style="display:flex; align-items:center; width:100%;">
+            <i class="fas fa-bars handle" style="cursor: grab; color: #aaa; margin-right: 8px; padding: 5px;"></i>
 
-      <span class="waypoint-number" style="margin-right: 5px; font-weight:bold; color:#007bff;"></span>
+            <span class="waypoint-number" style="margin-right: 5px; font-weight:bold; color:#007bff;"></span>
 
-      <input type="text"
-             class="waypoint-name-input"
-             placeholder="Назва"
-             style="flex-grow:1; border:1px solid transparent; background:transparent;">
+            <input type="text"
+                   class="waypoint-name-input"
+                   placeholder="Назва"
+                   style="flex-grow:1; border:1px solid transparent; background:transparent;">
 
-      <button class="btn-delete" style="color:#dc3545; border:none; background:none; cursor:pointer; padding:0 5px;">
-        <i class="fas fa-trash-alt"></i>
-      </button>
+            <button class="btn-delete"
+                    style="color:#dc3545; border:none; background:none; cursor:pointer; padding:0 5px;">
+                <i class="fas fa-trash-alt"></i>
+            </button>
+        </div>
     </div>
-  </div>
 </template>
 
 <div id="qrModal" class="modal">
-  <div class="modal-content">
-    <span class="close-btn" onclick="closeQrModal()">&times;</span>
-    <h2>Скануй для завантаження</h2>
-    <div id="qrcode" style="display: flex; justify-content: center; margin: 20px 0;"></div>
-    <p style="font-size: 0.9rem; color: #666;">Відкрийте камеру телефону та перейдіть за посиланням, щоб завантажити GPX.</p>
-  </div>
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeQrModal()">&times;</span>
+        <h2>Скануй для завантаження</h2>
+        <div id="qrcode" style="display: flex; justify-content: center; margin: 20px 0;"></div>
+        <p style="font-size: 0.9rem; color: #666;">Відкрийте камеру телефону та перейдіть за посиланням, щоб завантажити
+            GPX.</p>
+    </div>
 </div>
 
 </body>

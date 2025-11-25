@@ -1,0 +1,24 @@
+/*
+ * base.css
+ * Основна розмітка сторінки та контейнерів.
+ */
+
+body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow: hidden; /* Запобігаємо скролу всієї сторінки */
+}
+
+.container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+#map {
+    flex-grow: 1; /* Карта займає все доступне місце */
+    height: 100%;
+    z-index: 1;
+}
