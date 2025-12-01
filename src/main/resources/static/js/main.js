@@ -119,13 +119,32 @@ function triggerRouteCalculation() {
 }
 
 function applyRouteData(data) {
+    // data тепер виглядає так: { trackPoints: [...], climbs: [...] }
+
+    // 1. Малюємо основний синій маршрут
     MapCore.drawPolyline(data.trackPoints, (latLng) => {
         addWaypoint(latLng.lat, latLng.lng, state.waypoints.length - 1);
     });
-    Ui.updateRouteInfo(data.distanceMeters, data.durationSeconds);
+
+    Ui.updateRouteInfo(data.distanceMeters, data.durationSeconds); // Якщо ці поля є у відповіді
+    // ПРИМІТКА: Якщо distance/duration раніше приходили окремо, переконайтесь,
+    // що ваш новий ElevationResponseDTO містить їх, або беріть їх з іншого місця.
+    // Якщо ви змінили API так, що тепер повертається тільки ElevationResponseDTO,
+    // то вам треба додати поля distance/duration в цей DTO на стороні Java!
+    // АБО: повернути старий DTO, який містить всередині elevationData.
 
     document.getElementById('elevation-panel').style.display = 'flex';
+
+    // Оновлюємо графік
     Elevation.updateElevation(data.trackPoints, state.isElevationOpen);
+
+    // === НОВЕ: Зберігаємо climbs у глобальний стан або передаємо далі ===
+    state.currentClimbs = data.climbs;
+    state.currentTrackPoints = data.trackPoints;
+
+    if (state.isElevationOpen) {
+        MapCore.drawClimbs(state.currentClimbs, state.currentTrackPoints);
+    }
 }
 
 // === ІНШЕ (ЕКСПОРТ та QR) ===
@@ -188,20 +207,32 @@ window.toggleElevationPanel = () => {
     const chevron = document.getElementById('elevation-chevron');
 
     if (panel.classList.contains('expanded')) {
+        // Закриття
         panel.classList.remove('expanded', 'open');
         state.isElevationOpen = false;
         chevron.className = 'fas fa-chevron-up';
+
+        MapCore.clearClimbs(); // <--- ПРИБИРАЄМО ЧЕРВОНЕ ПРИ ЗАКРИТТІ
         return;
     }
 
+    // Відкриття
     state.isElevationOpen = !state.isElevationOpen;
     if (state.isElevationOpen) {
         panel.classList.add('open');
         chevron.className = 'fas fa-chevron-down';
-        triggerRouteCalculation();
+
+        // <--- МАЛЮЄМО, ЯКЩО Є ДАНІ
+        if (state.currentClimbs && state.currentTrackPoints) {
+            MapCore.drawClimbs(state.currentClimbs, state.currentTrackPoints);
+        } else {
+            triggerRouteCalculation(); // Якщо даних нема, завантажуємо
+        }
+
     } else {
         panel.classList.remove('open');
         chevron.className = 'fas fa-chevron-up';
+        MapCore.clearClimbs(); // <--- ПРИБИРАЄМО
     }
     setTimeout(() => Elevation.resizeChart(), 310);
 };

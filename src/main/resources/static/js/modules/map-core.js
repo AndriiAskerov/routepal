@@ -6,6 +6,7 @@
 let mapInstance = null;
 let routeLayer = null;
 let highlightLayer = null; // Шар підсвітки
+let climbsLayerGroup = null;
 
 /**
  * Ініціалізує карту.
@@ -21,6 +22,9 @@ export function initMap(elementId, onClickCallback) {
     mapInstance.on('click', (e) => {
         onClickCallback(e.latlng.lat, e.latlng.lng);
     });
+
+    // Ініціалізуємо групу шарів
+    climbsLayerGroup = L.layerGroup().addTo(map);
 }
 
 /**
@@ -133,4 +137,50 @@ export function clearHighlight() {
         mapInstance.removeLayer(highlightLayer);
         highlightLayer = null;
     }
+}
+
+/**
+ * Малює червоні ділянки підйомів та підписи %
+ * @param {Array} climbs - масив об'єктів ClimbDTO
+ * @param {Array} allPoints - масив усіх точок маршруту {lat, lng}
+ */
+export function drawClimbs(climbs, allPoints) {
+    if (!climbsLayerGroup) return;
+    climbsLayerGroup.clearLayers(); // Очищаємо старі підйоми
+
+    if (!climbs || climbs.length === 0) return;
+
+    climbs.forEach(climb => {
+        // 1. Витягуємо координати для цього шматка
+        // ClimbDTO має startIndex та endIndex
+        const segmentCoords = allPoints.slice(climb.startIndex, climb.endIndex + 1);
+
+        if (segmentCoords.length < 2) return;
+
+        // 2. Малюємо червону лінію поверх маршруту
+        L.polyline(segmentCoords, {
+            color: '#d90429', // Червоний
+            weight: 6,        // Трохи товстіша за основний маршрут
+            opacity: 0.8
+        }).addTo(climbsLayerGroup);
+
+        // 3. Додаємо підпис з % посередині ділянки
+        const middleIndex = Math.floor(segmentCoords.length / 2);
+        const centerPoint = segmentCoords[middleIndex];
+
+        L.tooltip({
+            permanent: true,   // Завжди показувати, не тільки при наведенні
+            direction: 'center',
+            className: 'climb-label', // Клас з CSS
+            offset: [0, 0]
+        })
+            .setContent(`${climb.avgGradient.toFixed(1)}%`)
+            .setLatLng(centerPoint)
+            .addTo(climbsLayerGroup);
+    });
+}
+
+// Функція для приховання підйомів (якщо закрили графік)
+export function clearClimbs() {
+    if (climbsLayerGroup) climbsLayerGroup.clearLayers();
 }

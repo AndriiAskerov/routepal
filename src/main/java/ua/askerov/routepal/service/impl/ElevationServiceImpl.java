@@ -14,14 +14,19 @@ import java.util.List;
 import java.util.Map;
 
 @Service
-public class ElevationServiceImpl implements ElevationService { // Перейменуйте клас, якщо він у вас ElevationServiceImpl
+public class ElevationServiceImpl implements ElevationService {
 
     private final WebClient webClient;
 
-    // Параметри для визначення підйому
-    private static final double MIN_GRADIENT = 3.0; // Мінімальний нахил 3%
-    private static final double MIN_DISTANCE = 300; // Мінімальна довжина 300м
-    private static final double MIN_ELEVATION_GAIN = 15; // Мінімальний набір 15м
+    // === КОНСТАНТИ ДЛЯ НАЛАШТУВАННЯ ЧУТЛИВОСТІ ===
+    private static final double MIN_GRADIENT = 3.0;       // Мін. градієнт для початку (%)
+    private static final double KEEP_GRADIENT = 1.0;      // Мін. градієнт для продовження (%)
+    private static final double MIN_DISTANCE = 300;       // Мін. дистанція для "класичного" підйому (м)
+    private static final double WALL_CLIMB_SCORE = 1000;  // Поріг балів для коротких "стінок" (Score = Dist * Grad)
+
+    // Пороги категорій (Strava-like)
+    private static final double CAT_4_SCORE = 8000;
+    private static final double HARD_SCORE = 3500;
 
     public ElevationServiceImpl(OrsConfigProperties orsConfig) {
         this.webClient = WebClient.builder()
@@ -31,14 +36,13 @@ public class ElevationServiceImpl implements ElevationService { // Перейм�
                 .build();
     }
 
-    // Змінюємо тип повернення на DTO
     @Override
     public ElevationResponseDTO getElevationForTrack(List<Waypoint> trackPoints) {
         if (trackPoints == null || trackPoints.isEmpty()) {
             return new ElevationResponseDTO(new ArrayList<>(), new ArrayList<>());
         }
 
-        // 1. Отримуємо висоти від API (Ваш існуючий код)
+        // 1. Отримуємо висоти від API
         List<double[]> coordinates = trackPoints.stream()
                 .map(wp -> new double[]{wp.getLongitude(), wp.getLatitude()})
                 .toList();
@@ -57,19 +61,25 @@ public class ElevationServiceImpl implements ElevationService { // Перейм�
                     .bodyToMono(JsonNode.class)
                     .block();
 
-            JsonNode coordsNode = response.path("geometry").path("coordinates");
-            if (coordsNode.isArray()) {
-                for (JsonNode point : coordsNode) {
-                    double lon = point.get(0).asDouble();
-                    double lat = point.get(1).asDouble();
-                    double ele = point.get(2).asDouble();
-                    enrichedPoints.add(new Waypoint(lat, lon, ele));
+            if (response != null) {
+                JsonNode coordsNode = response.path("geometry").path("coordinates");
+                if (coordsNode.isArray()) {
+                    for (JsonNode point : coordsNode) {
+                        double lon = point.get(0).asDouble();
+                        double lat = point.get(1).asDouble();
+                        double ele = point.get(2).asDouble();
+                        enrichedPoints.add(new Waypoint(lat, lon, ele));
+                    }
                 }
             }
         } catch (Exception e) {
             System.err.println("Elevation API Error: " + e.getMessage());
-            // У разі помилки повертаємо точки без висоти (або з 0)
             enrichedPoints = new ArrayList<>(trackPoints);
+        }
+
+        // Якщо API не повернуло точок (або помилка), використовуємо вхідні, але без аналізу підйомів
+        if (enrichedPoints.isEmpty()) {
+            return new ElevationResponseDTO(trackPoints, new ArrayList<>());
         }
 
         // 2. АНАЛІЗ ПІДЙОМІВ
@@ -93,53 +103,90 @@ public class ElevationServiceImpl implements ElevationService { // Перейм�
             double dist = distance(p1, p2);
             double eleDiff = p2.getElevation() - p1.getElevation();
 
-            // Якщо дистанція 0 (дублікати точок), пропускаємо
             if (dist == 0) continue;
 
             double gradient = (eleDiff / dist) * 100;
 
-            // Логіка початку/продовження підйому
-            if (gradient >= MIN_GRADIENT) {
+            // Логіка "гістерезису":
+            // Починаємо, якщо круто (3%). Продовжуємо, поки не стане зовсім плоско (< 1%).
+            if (gradient >= KEEP_GRADIENT) {
                 if (startIndex == -1) {
-                    startIndex = i;
-                    startEle = p1.getElevation();
-                    segmentDist = 0;
+                    // Старт сегменту
+                    if (gradient >= MIN_GRADIENT) {
+                        startIndex = i;
+                        startEle = p1.getElevation();
+                        segmentDist = 0;
+                    }
                 }
-                segmentDist += dist;
-            } else {
-                // Градієнт впав. Перевіряємо, чи це кінець підйому, чи короткий "виполог"
-                // Для простоти: якщо градієнт став < 3%, закриваємо сегмент.
-                // (У складніших алгоритмах можна дозволяти короткі спади)
-
+                // Продовження сегменту
                 if (startIndex != -1) {
-                    finishSegment(climbs, points, startIndex, i, segmentDist, startEle);
-                    startIndex = -1; // Скидаємо
+                    segmentDist += dist;
+                }
+            } else {
+                // Градієнт впав. Закриваємо сегмент.
+                if (startIndex != -1) {
+                    validateAndAddClimb(climbs, points, startIndex, i, segmentDist, startEle);
+                    startIndex = -1;
                 }
             }
         }
 
-        // Перевірка останнього сегменту, якщо він йшов до самого фінішу
+        // Перевірка хвоста (якщо маршрут закінчується на горі)
         if (startIndex != -1) {
-            finishSegment(climbs, points, startIndex, points.size() - 1, segmentDist, startEle);
+            validateAndAddClimb(climbs, points, startIndex, points.size() - 1, segmentDist, startEle);
         }
 
         return climbs;
     }
 
-    private void finishSegment(List<ClimbDTO> climbs, List<Waypoint> points, int start, int end, double dist, double startEle) {
-        double endEle = points.get(end).getElevation();
-        double gain = endEle - startEle;
+    private void validateAndAddClimb(List<ClimbDTO> climbs, List<Waypoint> points, int startIndex, int endIndex, double distance, double startEle) {
+        double endEle = points.get(endIndex).getElevation();
+        double elevationGain = endEle - startEle;
 
-        // Фільтрація шумів:
-        if (dist >= MIN_DISTANCE && gain >= MIN_ELEVATION_GAIN) {
-            double avgGrad = (gain / dist) * 100;
-            climbs.add(new ClimbDTO(start, end, dist, avgGrad, gain));
+        // Базовий захист
+        if (distance == 0 || elevationGain <= 0) return;
+
+        double avgGradient = (elevationGain / distance) * 100;
+
+        // === ОБРАХУНОК "SCORE" ===
+        // Формула: Дистанція (м) * Градієнт (%)
+        double climbScore = distance * avgGradient;
+
+        // Умова 1: Класичний підйом (довгий)
+        boolean isClassicClimb = distance >= MIN_DISTANCE && avgGradient >= MIN_GRADIENT;
+
+        // Умова 2: "Стінка" (коротка, але з великим Score)
+        // Наприклад: 150м * 8% = 1200 > 1000 -> Спрацює
+        boolean isWall = climbScore >= WALL_CLIMB_SCORE;
+
+        if (isClassicClimb || isWall) {
+            ClimbDTO climb = new ClimbDTO();
+            climb.setStartIndex(startIndex);
+            climb.setEndIndex(endIndex);
+
+            // Зверніть увагу: використовуйте точні назви сеттерів з вашого DTO
+            // Якщо у вас setDistanceMeters, то залишаємо так. Якщо просто setDistance - змініть.
+            climb.setDistanceMeters(distance); // або climb.setDistance(distance);
+
+            climb.setAvgGradient(avgGradient);
+            climb.setElevationGain(elevationGain);
+
+            // === ВИЗНАЧЕННЯ КАТЕГОРІЇ ===
+            if (climbScore >= CAT_4_SCORE) {
+                climb.setCategory("Cat 4"); // Офіційна категорія UCI/Strava (найлегша з категорійних)
+            } else if (climbScore >= HARD_SCORE) {
+                climb.setCategory("Тяжкий");
+            } else {
+                climb.setCategory("Середній");
+            }
+
+            climbs.add(climb);
         }
     }
 
     // Haversine formula (у метрах)
     private double distance(Waypoint p1, Waypoint p2) {
-        double R = 6371e3;
+        double R = 6371e3; // Радіус Землі в метрах
         double lat1 = Math.toRadians(p1.getLatitude());
         double lat2 = Math.toRadians(p2.getLatitude());
         double dLat = Math.toRadians(p2.getLatitude() - p1.getLatitude());

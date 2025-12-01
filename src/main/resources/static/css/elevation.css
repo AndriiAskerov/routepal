@@ -150,3 +150,14 @@
     font-size: 0.8rem;
     font-weight: bold;
 }
+
+/* Стиль для підписів градієнту на карті */
+.climb-label {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: #d90429; /* Яскраво-червоний */
+    font-weight: 900;
+    font-size: 14px;
+    text-shadow: 1px 1px 0 #fff, -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff; /* Біла обводка для читабельності */
+}
