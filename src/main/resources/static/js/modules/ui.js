@@ -30,14 +30,62 @@ export function updateRouteInfo(meters, seconds) {
     `;
 }
 
+// Функції для керування виглядом панелі висот
+export function setElevationPanelState(isOpen) {
+    const panel = document.getElementById('elevation-panel');
+    const chevron = document.getElementById('elevation-chevron');
+
+    if (isOpen) {
+        panel.classList.add('open');
+        chevron.className = 'fas fa-chevron-down';
+    } else {
+        panel.classList.remove('open', 'expanded'); // Також прибираємо expanded при закритті
+        chevron.className = 'fas fa-chevron-up';
+    }
+}
+
+export function toggleChartExpand() {
+    const panel = document.getElementById('elevation-panel');
+    panel.classList.toggle('expanded');
+    return panel.classList.contains('expanded');
+}
+
 /**
  * Прив'язка глобальних кнопок до функцій з main.js
- * Оскільки HTML використовує onclick="func()", ми експортуємо ці функції в window.
+ * HTML використовує onclick="func()", ми експортуємо ці функції в window.
  */
-export function bindButtons({ onAddPointMode, onReverse, onExport, onShareQr, onCloseQrModal }) {
+export function bindUiActions({
+                                  onAddPointMode,
+                                  onReverse,
+                                  onExport,
+                                  onShareQr,
+                                  onCloseQrModal,
+                                  onTitleChange,        // <-- Нове: зміна назви
+                                  onToggleElevation,    // <-- Нове: клік по заголовку висот
+                                  onExpandElevationChart: onExpandElevationChart         // <-- Нове: розгортання графіку
+                              }) {
+    // Біндинг глобальних кнопок (для onclick в HTML)
     window.addPointMode = onAddPointMode;
     window.reverseRoute = onReverse;
     window.exportRoute = onExport;
-    window.shareRouteQr = onShareQr;       // <--- Експорт в глобальну область
-    window.closeQrModal = onCloseQrModal;  // <--- Експорт в глобальну область
+    window.shareRouteQr = onShareQr;
+    window.closeQrModal = onCloseQrModal;
+
+    // Біндинг нових функцій панелі висот (для onclick в HTML)
+    window.toggleElevationPanel = onToggleElevation;
+    window.toggleExpandChart = onExpandElevationChart;
+
+    // Біндинг інпуту назви (через addEventListener, бо це зручніше для input)
+    const titleInput = document.getElementById('route-title-input');
+    if (titleInput) {
+        titleInput.addEventListener('input', (e) => onTitleChange(e.target.value));
+    }
+}
+
+// Функція для керування видимістю САМОЇ ПАНЕЛІ (не розгортання, а display: none/flex)
+export function setPanelVisibility(isVisible) {
+    const panel = document.getElementById('elevation-panel');
+    if (panel) {
+        panel.style.display = isVisible ? 'flex' : 'none';
+    }
 }

@@ -16,7 +16,7 @@
 
 /* Стан: Відкрито в сайдбарі */
 .elevation-panel.open {
-    height: 250px;
+    height: 40vh;
     border-top: 2px solid #007bff;
 }
 
@@ -26,7 +26,7 @@
     bottom: 0;
     left: 0;
     width: 100vw;
-    height: 40vh;
+    height: 50vh;
     z-index: 2000;
     box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
     border-top: 3px solid #007bff;
@@ -90,10 +90,11 @@
 }
 
 .chart-wrapper {
-    flex: 2; /* Графік займає 2/3 місця */
-    min-height: 0;
-    position: relative;
+    flex: 0 0 12vh;
     width: 100%;
+    position: relative;
+    border-bottom: 1px solid #ddd; /* Розділювач між графіком і списком */
+    min-height: 80px; /* Запобіжник для дуже малих екранів */
 }
 
 /* Список підйомів */

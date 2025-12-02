@@ -18,7 +18,6 @@ public class ServiceUsageAspect {
         this.auditor = auditor;
     }
 
-    // --- 1. Аудит розрахунку маршруту (як було) ---
     @Pointcut("execution(* ua.askerov.routepal.service.impl.RouteServiceImpl.calculateRoute(..))")
     public void routeServiceCall() {}
 
@@ -26,25 +25,7 @@ public class ServiceUsageAspect {
     @Around("routeServiceCall()")
     public Object auditRoute(ProceedingJoinPoint joinPoint) throws Throwable {
         if (!auditor.tryIncrementDirectionsCounter()) {
-            // інформуємо клієнта, що ліміт вичерпано
-            System.err.println("Перевищено ліміт запитів"); // DBG вивід на консоль TODO логування
-            return RouteResponseDTO.builder()
-                    .status("error")
-                    .message(this.getClass().getSimpleName() + "Денний ліміт 'v2/directions вичерпано'. Спробуйте завтра").build();
-        }
-        // виклик самого методу (ліміт не вичерпано)
-        return joinPoint.proceed();
-    }
-
-    @Pointcut("execution(* ua.askerov.routepal.service.ExportService.exportRoute(..))")
-    public void exportServiceCall() {}
-
-    @Around("exportServiceCall()")
-    public Object auditExport(ProceedingJoinPoint joinPoint) throws Throwable {
-        // Перевіряємо ІНШИЙ лічильник
-        if (!auditor.tryIncrementExportCounter()) {
-            System.err.println("Ліміт Export вичерпано");
-            // Кидаємо виняток, який перехопить контролер
+            System.err.println("Ліміт Directions вичерпано");
             throw new RuntimeException("LIMIT_EXCEEDED");
         }
         return joinPoint.proceed();
@@ -56,6 +37,7 @@ public class ServiceUsageAspect {
     @Around("elevationServiceCall()")
     public Object auditElevation(ProceedingJoinPoint joinPoint) throws Throwable {
         if (!auditor.tryIncrementElevationCounter()) {
+            System.err.println("Ліміт Elevation вичерпано");
             throw new RuntimeException("LIMIT_EXCEEDED");
         }
         return joinPoint.proceed();

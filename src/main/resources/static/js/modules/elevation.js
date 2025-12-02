@@ -1,46 +1,36 @@
 /**
  * elevation.js
- * Відповідає за Chart.js та логіку панелі висот.
+ * Відповідає за візуалізацію панелі висот.
  */
 import { getElevationApi } from './api.js';
 import * as MapCore from './map-core.js'; // Виклик підсвітки
 
 let chartInstance = null;
-let currentTrack = [];
-let currentData = null; // Тут зберігаємо { trackPoints, climbs }
-// const cache = new Map();
 
 /**
- * Головна функція оновлення даних.
- * @param {Array} trackPoints - Точки маршруту.
- * @param {Boolean} isPanelOpen - Чи відкрита панель зараз.
+ * Оновлює графік та список підйомів на основі отриманих даних.
+ * @param {Array} trackPoints - Точки маршруту (вже з висотою Z)
+ * @param {Array} climbs - Список підйомів
+ * @param {Boolean} isPanelOpen - Чи відкрита панель
  */
-export async function updateElevation(trackPoints, isPanelOpen) {
-    if (!isPanelOpen || !trackPoints || trackPoints.length === 0) return;
+export function updateElevation(trackPoints, climbs, isPanelOpen) {
+    if (!isPanelOpen || !trackPoints) return;
 
-    // ... кешування (оновіть логіку кешу, бо структура змінилась) ...
-    // Для спрощення, поки без кешу або припускаємо, що getElevationApi повертає об'єкт
-    try {
-        const data = await getElevationApi(trackPoints);
-        currentData = data;
+    // 1. Рендеримо графік
+    renderChart(trackPoints);
 
-        // 1. Рендеримо графік (передаємо тільки точки)
-        renderChart(data.trackPoints);
-
-        // 2. Рендеримо список підйомів
-        renderClimbsList(data.climbs, data.trackPoints);
-
-    } catch (e) { console.error(e); }
+    // 2. Рендеримо список (передаємо climbs, які отримали з main.js)
+    renderClimbsList(climbs, trackPoints);
 }
 
 function renderClimbsList(climbs, allPoints) {
-    // Спочатку треба створити контейнер в HTML, якщо його немає
-    // Але ми зробимо це динамічно у map.html або тут
     let listContainer = document.querySelector('.climbs-list');
 
-    // Якщо немає підйомів
-    if (!climbs || climbs.length === 0) {
-        if(listContainer) listContainer.innerHTML = '<div style="padding:10px; color:#999; text-align:center;">Рівнина... 😴</div>';
+    // Якщо climbs null або undefined, вважаємо що це пустий масив
+    const safeClimbs = climbs || [];
+
+    if (safeClimbs.length === 0) {
+        if(listContainer) listContainer.innerHTML = '<div style="padding:10px; color:#999; text-align:center; font-size: 0.9em">Рівнина... 😴<br><span style="font-size:0.8em">Або дані ще не завантажились</span></div>';
         return;
     }
 
@@ -49,14 +39,13 @@ function renderClimbsList(climbs, allPoints) {
     // Заголовок
     const title = document.createElement('div');
     title.className = 'climbs-title';
-    title.innerText = `Знайдено підйомів: ${climbs.length}`;
+    title.innerText = `Знайдено підйомів: ${safeClimbs.length}`;
     listContainer.appendChild(title);
 
-    climbs.forEach((climb, index) => {
+    safeClimbs.forEach((climb, index) => {
         const el = document.createElement('div');
         el.className = 'climb-item';
 
-        // Форматуємо дані
         const distKm = (climb.distanceMeters / 1000).toFixed(1);
         const avg = climb.avgGradient.toFixed(1);
         const gain = Math.round(climb.elevationGain);
@@ -69,33 +58,23 @@ function renderClimbsList(climbs, allPoints) {
             <div class="grade-badge">${avg}%</div>
         `;
 
-        // Interaction: Hover
-        el.addEventListener('mouseenter', () => {
-            MapCore.highlightSegment(allPoints, climb.startIndex, climb.endIndex);
-        });
-
-        // Interaction: Click (Зум)
-        el.addEventListener('click', () => {
-            MapCore.highlightSegment(allPoints, climb.startIndex, climb.endIndex);
-            // Тут можна додати зум, якщо треба
-        });
+        el.addEventListener('mouseenter', () => MapCore.highlightSegment(allPoints, climb.startIndex, climb.endIndex));
+        el.addEventListener('click', () => MapCore.highlightSegment(allPoints, climb.startIndex, climb.endIndex));
 
         listContainer.appendChild(el);
     });
 
-    // При виході мишкою зі списку - очищаємо
-    listContainer.addEventListener('mouseleave', () => {
-        MapCore.clearHighlight();
-    });
+    listContainer.addEventListener('mouseleave', () => MapCore.clearHighlight());
 }
 
 function renderChart(points) {
     const ctx = document.getElementById('elevationChart').getContext('2d');
 
     const labels = [];
-    const dataVals = points.map(p => p.elevation);
-    let dist = 0;
+    const dataVals = points.map(p => p.elevation); // ORS повертає elevation в p.elevation або p[2]
 
+    // Розрахунок дистанції для осі X
+    let dist = 0;
     for (let i = 0; i < points.length; i++) {
         if (i > 0) {
             const p1 = L.latLng(points[i-1].latitude, points[i-1].longitude);
@@ -103,7 +82,6 @@ function renderChart(points) {
             dist += p1.distanceTo(p2);
         }
         labels.push((dist / 1000).toFixed(1));
-        dataVals.push(points[i].elevation);
     }
 
     if (chartInstance) {
@@ -111,6 +89,7 @@ function renderChart(points) {
         chartInstance.data.datasets[0].data = dataVals;
         chartInstance.update();
     } else {
+        // ... (створення chartInstance без змін) ...
         chartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -132,8 +111,8 @@ function renderChart(points) {
                 maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: { ticks: { maxTicksLimit: 10 } },
-                    y: { beginAtZero: false }
+                    x: { ticks: { maxTicksLimit: 10, maxRotation: 0 } }, // maxRotation щоб не крутило текст
+                    y: { beginAtZero: false, ticks: { maxTicksLimit: 5 } } // менше тіків по Y для економії місця
                 },
                 plugins: { legend: { display: false } }
             }

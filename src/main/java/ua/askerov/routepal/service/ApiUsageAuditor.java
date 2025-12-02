@@ -18,12 +18,10 @@ public class ApiUsageAuditor {
 
     // --- ЛІМІТИ ---
     private final long DIRECTIONS_LIMIT;
-    private final long EXPORT_LIMIT;
     private final long ELEVATION_LINE_LIMIT;
 
     // --- ЛІЧИЛЬНИКИ (Атомарні для безпеки потоків) ---
     private final AtomicLong directionsCount = new AtomicLong(0);
-    private final AtomicLong exportCount = new AtomicLong(0);
     private final AtomicLong elevationLineCount = new AtomicLong(0);
     // -- JSON ---
     private final ObjectMapper objectMapper;
@@ -32,7 +30,6 @@ public class ApiUsageAuditor {
 
     public ApiUsageAuditor(OrsConfigProperties orsConfig) {
         this.DIRECTIONS_LIMIT = orsConfig.getApi().getLimit().getDirections().getDaily();
-        this.EXPORT_LIMIT = orsConfig.getApi().getLimit().getExport().getDaily();
         this.ELEVATION_LINE_LIMIT = orsConfig.getApi().getLimit().getElevation().getLine().getDaily();
         this.objectMapper = new ObjectMapper();
     }
@@ -43,7 +40,6 @@ public class ApiUsageAuditor {
             System.out.println("Новий день! Ліміт запитів оновлено");
             lastResetDate = LocalDate.now();
             directionsCount.set(0);
-            exportCount.set(0);
             elevationLineCount.set(0);
             persistStats();
         }
@@ -83,10 +79,6 @@ public class ApiUsageAuditor {
         return tryIncrementCounter(directionsCount, DIRECTIONS_LIMIT);
     }
 
-    public boolean tryIncrementExportCounter() {
-        return tryIncrementCounter(exportCount, EXPORT_LIMIT);
-    }
-
     public boolean tryIncrementElevationCounter() {
         return tryIncrementCounter(elevationLineCount, ELEVATION_LINE_LIMIT);
     }
@@ -98,18 +90,15 @@ public class ApiUsageAuditor {
                 Map<String, Object> stats = objectMapper.readValue(statsFile, Map.class);
                 LocalDate savedDate = LocalDate.parse((String) stats.get("date"));
 
-                // Якщо збережений файл за сьогодні - відновлюємо лічильник
                 if (savedDate.isEqual(LocalDate.now())) {
                     this.lastResetDate = savedDate;
                     this.directionsCount.set(((Number) stats.get("directionsCount")).longValue());
-                    this.exportCount.set(((Number) stats.get("exportCount")).longValue());
                     this.elevationLineCount.set(((Number) stats.get("elevationLineCount")).longValue());
                     System.out.printf("""
                             Статистика API відновлена:
                             \t- Directions: %d/%d
-                            \t- Export: %d/%d
                             \t- Elevation Line: %d/%d
-                            """, directionsCount.get(), DIRECTIONS_LIMIT, exportCount.get(), EXPORT_LIMIT, elevationLineCount.get(), ELEVATION_LINE_LIMIT);
+                            """, directionsCount.get(), DIRECTIONS_LIMIT, elevationLineCount.get(), ELEVATION_LINE_LIMIT);
                 } else {
                     // Якщо файл за вчора, просто починаємо з нуля
                     System.out.println("Статистика API застаріла, починаємо з нуля");
@@ -126,7 +115,7 @@ public class ApiUsageAuditor {
     public void persistStats() {
         try {
             // Зберігаємо нові лічильники
-            Map<String, Object> stats = Map.of("date", lastResetDate.toString(), "directionsCount", directionsCount.get(), "exportCount", exportCount.get(), "elevationLineCount", elevationLineCount.get());
+            Map<String, Object> stats = Map.of("date", lastResetDate.toString(), "directionsCount", directionsCount.get(), "elevationLineCount", elevationLineCount.get());
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(statsFile, stats);
         } catch (IOException e) {
             System.err.println("Не вдалося зберегти статистику API: " + e.getMessage());

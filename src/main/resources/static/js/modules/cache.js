@@ -1,38 +1,50 @@
 /**
  * cache.js
- * Відповідає за зберігання вже розрахованих маршрутів.
+ * Відповідає за зберігання та часткове оновлення даних маршруту.
  */
-const routeCache = new Map();
 
-/**
- * Генерує унікальний ключ для списку точок.
- * Використовує координати з точністю до 5 знаків (щоб мікро-зсуви не ламали кеш).
- */
-export function generateKey(waypoints) {
-    return waypoints
-        .map(p => `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`)
-        .join('|'); // "50.123,30.123|50.456,30.456"
+const storage = new Map();
+
+// Генерує унікальний ключ для маршруту на основі координат точок
+function generateKey(waypoints) {
+    return JSON.stringify(waypoints.map(p => ({ lat: p.lat, lng: p.lng })));
 }
 
 export function get(waypoints) {
     const key = generateKey(waypoints);
-    if (routeCache.has(key)) {
-        console.log(`[Cache] Hit: ${key}`);
-        return routeCache.get(key);
+    return storage.get(key);
+}
+
+// Зберігає базові дані (геометрію)
+export function set(waypoints, routeData) {
+    const key = generateKey(waypoints);
+    // Зберігаємо об'єкт. hasElevation буде false, якщо climbs немає або null
+    storage.set(key, {
+        ...routeData,
+        timestamp: Date.now()
+    });
+}
+
+// Оновлює існуючий запис (додає висоти)
+export function updateWithElevation(waypoints, elevationData) {
+    const key = generateKey(waypoints);
+    const existing = storage.get(key);
+
+    if (existing) {
+        // Ми об'єднуємо старі дані (дистанція, час) з новими (climbs, trackPoints Z)
+        const updated = {
+            ...existing,
+            climbs: elevationData.climbs,
+            // Якщо API висот повертає оновлені точки (з Z координатою), беремо їх
+            trackPoints: elevationData.trackPoints || existing.trackPoints
+        };
+        storage.set(key, updated);
+        return updated;
     }
     return null;
 }
 
-export function set(waypoints, data) {
-    const key = generateKey(waypoints);
-    // Можна додати обмеження розміру кешу (наприклад, зберігати тільки останні 10)
-    if (routeCache.size > 20) {
-        const firstKey = routeCache.keys().next().value;
-        routeCache.delete(firstKey);
-    }
-    routeCache.set(key, data);
-}
-
-export function clear() {
-    routeCache.clear();
+// Допоміжна функція: перевіряє, чи містить кеш дані про висоти
+export function hasElevationData(cachedEntry) {
+    return cachedEntry && cachedEntry.climbs && cachedEntry.climbs.length > 0;
 }

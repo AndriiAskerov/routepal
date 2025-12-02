@@ -6,6 +6,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import ua.askerov.routepal.model.ElevationResponseDTO;
+import ua.askerov.routepal.model.ExportRequestDTO;
 import ua.askerov.routepal.model.RouteResponseDTO;
 import ua.askerov.routepal.model.Waypoint;
 import ua.askerov.routepal.service.ElevationService;
@@ -27,7 +28,7 @@ public class RouteController {
 
     // Тимчасове сховище маршрутів: ID -> Список точок
     // У реальному проді тут потрібен Redis або БД з автовидаленням, але для тесту Map підійде.
-    private final Map<String, List<Waypoint>> sharedRoutes = new ConcurrentHashMap<>();
+    private final Map<String, ExportRequestDTO> sharedRoutes = new ConcurrentHashMap<>();
 
 
     public RouteController(RouteServiceImpl routeService, ExportServiceImpl exportService, ElevationService elevationService) {
@@ -43,52 +44,49 @@ public class RouteController {
     }
 
     @PostMapping("/export")
-    public ResponseEntity<?> exportRoute(@RequestBody List<Waypoint> waypoints) {
+    public ResponseEntity<?> exportRoute(@RequestBody ExportRequestDTO requestDTO) {
         try {
-            // Викликаємо спеціалізований сервіс
+            String file = exportService.exportRoute(requestDTO);
+            String filename = requestDTO.generateFilename();
+            // На випадок кирилиці та пробілів
+            String encodedFilename = java.net.URLEncoder.encode(filename, java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("+", "%20");
 
-            String gpxXml = exportService.exportRoute(waypoints);
-
-            // Повертаємо файл
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"route.gpx\"")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"; filename*=UTF-8''" + encodedFilename)
                     .contentType(MediaType.APPLICATION_XML)
-                    .body(gpxXml);
+                    .body(file);
 
         } catch (RuntimeException e) {
-            // Обробка помилок (наприклад, якщо ліміт вичерпано і Аспект кинув виняток)
-            if ("LIMIT_EXCEEDED".equals(e.getMessage())) {
-                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                        .body(new RouteResponseDTO.Builder()
-                                .status("error")
-                                .message("Денний ліміт експорту вичерпано.")
-                                .build());
-            }
             return ResponseEntity.internalServerError().body("Error: " + e.getMessage());
         }
     }
 
     @PostMapping("/share")
-    public ResponseEntity<Map<String, String>> shareRoute(@RequestBody List<Waypoint> waypoints) {
+    public ResponseEntity<Map<String, String>> shareRoute(@RequestBody ExportRequestDTO requestDTO) { // <-- Приймаємо DTO
         String id = UUID.randomUUID().toString();
-        sharedRoutes.put(id, waypoints);
+        sharedRoutes.put(id, requestDTO); // <-- Зберігаємо весь DTO
         return ResponseEntity.ok(Map.of("id", id));
     }
 
     @GetMapping("/download/{id}")
     public ResponseEntity<?> downloadSharedRoute(@PathVariable String id) {
-        List<Waypoint> waypoints = sharedRoutes.get(id);
-
-        if (waypoints == null) {
+        ExportRequestDTO requestDTO = sharedRoutes.get(id);
+        if (requestDTO == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Маршрут не знайдено або термін дії посилання вичерпано.");
         }
 
         try {
-            String gpxXml = exportService.exportRoute(waypoints);
+            String file = exportService.exportRoute(requestDTO);
+            String filename = requestDTO.generateFilename();
+            // На випадок кирилиці та пробілів
+            String encodedFilename = java.net.URLEncoder.encode(filename, java.nio.charset.StandardCharsets.UTF_8)
+                    .replace("+", "%20");
+
             return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"route_shared.gpx\"")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"; filename*=UTF-8''" + encodedFilename)
                     .contentType(MediaType.APPLICATION_XML)
-                    .body(gpxXml);
+                    .body(file);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Error generating GPX");
         }

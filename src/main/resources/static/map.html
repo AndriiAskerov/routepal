@@ -38,12 +38,17 @@
         </div>
 
         <div class="controls">
-            <button onclick="addPointMode()" class="btn"><i class="fas fa-plus"></i> Додати точку</button>
-            <button onclick="reverseRoute()" class="btn"><i class="fas fa-exchange-alt"></i> Зворотній</button>
-            <button onclick="shareRouteQr()" class="btn" style="background-color: #28a745; color: white;">
-                <i class="fas fa-qrcode"></i> QR Експорт
+            <button onclick="addPointMode()" class="btn-icon" title="Додати точку">
+                <i class="fas fa-plus"></i>
             </button>
-            <button onclick="exportRoute()" class="btn btn-primary"><i class="fas fa-file-export"></i> Експорт GPX
+            <button onclick="reverseRoute()" class="btn-icon" title="Зворотній маршрут">
+                <i class="fas fa-exchange-alt"></i>
+            </button>
+            <button onclick="exportRoute()" class="btn-icon" title="Експорт GPX">
+                <i class="fas fa-file-export"></i>
+            </button>
+            <button onclick="shareRouteQr()" class="btn-icon" title="QR Код">
+                <i class="fas fa-qrcode"></i>
             </button>
         </div>
 

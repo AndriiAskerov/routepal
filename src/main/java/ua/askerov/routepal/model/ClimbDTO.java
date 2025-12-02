@@ -22,8 +22,6 @@ public class ClimbDTO {
         this.category = category;
     }
 
-    // === Getters and Setters ===
-
     public int getStartIndex() {
         return startIndex;
     }

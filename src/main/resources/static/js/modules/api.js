@@ -15,11 +15,7 @@ export async function calculateRouteApi(waypoints) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     });
-
-    if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || 'Помилка розрахунку маршруту');
-    }
+    if (!response.ok) throw new Error('Помилка отримання маршруту');
     return await response.json();
 }
 
@@ -34,40 +30,55 @@ export async function getElevationApi(trackPoints) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(trackPoints)
     });
-
     if (!response.ok) throw new Error('Помилка отримання висот');
     return await response.json();
 }
 
 /**
  * Генерує QR-код посилання (отримує ID маршруту).
- * @param {Array} waypoints
+ * ... todo ОНОВИТИ ДОКУМЕНТАЦІЮ МЕТОДУ
  * @returns {Promise<String>} ID зашареного маршруту.
  */
-export async function shareRouteApi(waypoints) {
-    const payload = waypoints.map(p => ({ latitude: p.lat, longitude: p.lng }));
+export async function shareRouteApi(requestData) {
     const response = await fetch('/api/route/share', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(requestData) // <-- Відправляємо весь DTO
     });
-    if (!response.ok) throw new Error('Помилка Share API');
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Share failed');
+    }
+
     const data = await response.json();
     return data.id;
 }
 
 /**
  * Виконує запит на експорт файлу.
- * @param {Array} waypoints
- * @returns {Promise<Blob>} Файл (GPX).
+ * @param {Object} requestDTO - ExportRequestDTO на Java.
  */
-export async function exportRouteApi(waypoints) {
-    const payload = waypoints.map(p => ({ latitude: p.lat, longitude: p.lng }));
+export async function exportRouteApi(requestDTO) {
     const response = await fetch('/api/route/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(requestDTO) // Просто перетворюємо об'єкт у текст
     });
-    if (!response.ok) throw new Error('Помилка експорту');
-    return await response.blob();
+
+    if (!response.ok) throw new Error('Export failed');
+
+    let filename = 'route.gpx';
+    const disposition = response.headers.get('Content-Disposition');
+    if (disposition && disposition.indexOf('attachment') !== -1) {
+        const filenameRegex = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/;
+        const matches = filenameRegex.exec(disposition);
+        if (matches) {
+            if (matches[1]) filename = decodeURIComponent(matches[1]);
+            else if (matches[2]) filename = matches[2];
+        }
+    }
+
+    const blob = await response.blob();
+    return { blob, filename };
 }

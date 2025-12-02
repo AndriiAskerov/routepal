@@ -74,7 +74,7 @@ public class RouteServiceImpl implements RouteService {
             double distance = summary.path("distance").asDouble();
             long duration = summary.path("duration").asLong();
 
-            // Парсимо "плоский" маршрут (без реальних висот, ORS часто віддає 0 або неточні дані тут)
+            // Парсимо плаский маршрут
             List<Waypoint> flatTrackPoints = new ArrayList<>();
             if (coordsNode.isArray()) {
                 for (JsonNode point : coordsNode) {
@@ -84,28 +84,13 @@ public class RouteServiceImpl implements RouteService {
                 }
             }
 
-            // === 3. ВИКЛИКАЄМО ELEVATION SERVICE ===
-            // Ми беремо "плоскі" точки і просимо сервіс знайти для них висоту та підйоми
-            ElevationResponseDTO elevationData = elevationService.getElevationForTrack(flatTrackPoints);
-
-            // Використовуємо збагачені точки (з висотою) та список підйомів
-            List<Waypoint> enrichedPoints = elevationData.getTrackPoints();
-            // Якщо раптом сервіс повернув пустий список (помилка), беремо flatTrackPoints
-            if (enrichedPoints == null || enrichedPoints.isEmpty()) {
-                enrichedPoints = flatTrackPoints;
-            }
-
-            System.out.printf("Маршрут: %.2f м, підйомів знайдено: %d%n", distance,
-                    (elevationData.getClimbs() != null ? elevationData.getClimbs().size() : 0));
-
-            // 4. Формуємо відповідь з CLIMBS
             return RouteResponseDTO.builder()
                     .status("success")
                     .message("Маршрут успішно побудовано!")
-                    .trackPoints(enrichedPoints) // Тут тепер точки з реальною висотою
+                    .trackPoints(flatTrackPoints)
                     .distanceMeters(distance)
                     .durationSeconds(duration)
-                    .climbs(elevationData.getClimbs()) // <--- ОСЬ ВОНО!
+                    .climbs(null)
                     .build();
 
         } catch (Exception e) {

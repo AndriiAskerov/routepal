@@ -11,7 +11,16 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    box-sizing: border-box;
+    min-height: 50vh;
+    will-change: height;
     overflow: hidden;
+}
+
+.sidebar.shrunk {
+    height: 50vh;
+    border-bottom: 1px solid #ccc; /* Візуальна лінія розділу */
+    transition: height 0.4s ease-in-out;
 }
 
 .sidebar-header {
@@ -83,8 +92,40 @@
 }
 
 .controls {
+    display: flex;
+    flex-direction: row;     /* Горизонтально */
+    justify-content: space-evenly; /* Рівномірний відступ */
+    align-items: center;
     padding: 10px;
+    gap: 10px;               /* Відстань між кнопками */
+    background-color: #f8f9fa; /* Можна додати фон, щоб відділити від списку */
     border-top: 1px solid #eee;
-    background: #fff;
     flex-shrink: 0;
+}
+
+/* Стиль квадратної кнопки */
+.btn-icon {
+    width: 40px;
+    height: 40px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    border-radius: 6px;      /* Трохи заокруглені кути */
+    cursor: pointer;
+    display: flex;
+    justify-content: center; /* Центрування іконки */
+    align-items: center;
+    font-size: 1.1rem;
+    color: #555;
+    transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+    background-color: #e2e6ea;
+    color: #007bff;
+    border-color: #adb5bd;
+    transform: translateY(-1px); /* Легкий підйом при наведенні */
+}
+
+.btn-icon:active {
+    transform: translateY(0);
 }

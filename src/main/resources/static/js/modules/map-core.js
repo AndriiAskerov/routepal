@@ -24,7 +24,7 @@ export function initMap(elementId, onClickCallback) {
     });
 
     // Ініціалізуємо групу шарів
-    climbsLayerGroup = L.layerGroup().addTo(map);
+    climbsLayerGroup = L.layerGroup().addTo(mapInstance);
 }
 
 /**
@@ -151,27 +151,29 @@ export function drawClimbs(climbs, allPoints) {
     if (!climbs || climbs.length === 0) return;
 
     climbs.forEach(climb => {
-        // 1. Витягуємо координати для цього шматка
-        // ClimbDTO має startIndex та endIndex
-        const segmentCoords = allPoints.slice(climb.startIndex, climb.endIndex + 1);
+        // 1. Витягуємо об'єкти точок для цього шматка
+        const segmentPoints = allPoints.slice(climb.startIndex, climb.endIndex + 1);
 
-        if (segmentCoords.length < 2) return;
+        if (segmentPoints.length < 2) return;
+
+        // ВАЖЛИВО: Перетворюємо об'єкти {latitude, longitude} у масиви [lat, lng] для Leaflet
+        const segmentLatLngs = segmentPoints.map(p => [p.latitude, p.longitude]);
 
         // 2. Малюємо червону лінію поверх маршруту
-        L.polyline(segmentCoords, {
-            color: '#d90429', // Червоний
-            weight: 6,        // Трохи товстіша за основний маршрут
+        L.polyline(segmentLatLngs, { // Передаємо виправлений масив
+            color: '#d90429',
+            weight: 6,
             opacity: 0.8
         }).addTo(climbsLayerGroup);
 
         // 3. Додаємо підпис з % посередині ділянки
-        const middleIndex = Math.floor(segmentCoords.length / 2);
-        const centerPoint = segmentCoords[middleIndex];
+        const middleIndex = Math.floor(segmentLatLngs.length / 2);
+        const centerPoint = segmentLatLngs[middleIndex]; // Тепер це масив [lat, lng], Leaflet це зрозуміє
 
         L.tooltip({
-            permanent: true,   // Завжди показувати, не тільки при наведенні
+            permanent: true,
             direction: 'center',
-            className: 'climb-label', // Клас з CSS
+            className: 'climb-label',
             offset: [0, 0]
         })
             .setContent(`${climb.avgGradient.toFixed(1)}%`)

@@ -4,7 +4,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 @Component
-// Spring-префікс, пошуку властивості, що починаються з "ors"
 // : ors.api.url, ors.api.key, ors.profile
 @ConfigurationProperties(prefix = "ors")
 public class OrsConfigProperties {
@@ -32,8 +31,6 @@ public class OrsConfigProperties {
     public static class Api {
         private String key; // ors.api.key
         private String url; // ors.api.url
-
-        // Сюди ж можна додати ліміти! // TODO реалізувати? перевірити роботу!
         private Limit limit = new Limit(); // ors.api.limit.*
 
         public String getKey() {
@@ -63,24 +60,7 @@ public class OrsConfigProperties {
 
     public static class Limit { // TODO оцінити життєздатність ідеї, переваги\недоліки (особливо у контексті використання різних API "на льоту")
         private Directions directions = new Directions();
-        private Export export = new Export();
         private Elevation elevation = new Elevation();
-
-        public Elevation getElevation() {
-            return elevation;
-        }
-
-        public void setElevation(Elevation elevation) {
-            this.elevation = elevation;
-        }
-
-        public Export getExport() {
-            return export;
-        }
-
-        public void setExport(Export export) {
-            this.export = export;
-        }
 
         public Directions getDirections() {
             return directions;
@@ -90,19 +70,15 @@ public class OrsConfigProperties {
             this.directions = directions;
         }
 
-        public static class Directions {
-            private int daily;
-
-            public int getDaily() {
-                return daily;
-            }
-
-            public void setDaily(int daily) {
-                this.daily = daily;
-            }
+        public Elevation getElevation() {
+            return elevation;
         }
 
-        public static class Export {
+        public void setElevation(Elevation elevation) {
+            this.elevation = elevation;
+        }
+
+        public static class Directions {
             private int daily;
 
             public int getDaily() {
