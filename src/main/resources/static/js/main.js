@@ -17,6 +17,7 @@ const state = {
     isElevationRelevant: false,
 
     routeDistance: 0,
+    totalAscent: null, // <--- ВИПРАВЛЕНО: Було routeAccent (0), стало totalAscent (null)
     routeDuration: 0
 };
 
@@ -26,13 +27,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Карта, обробка ЛКМ - додатиТочку()
     MapCore.initMap('map', (lat, lng) => addWaypoint(lat, lng));
 
-    // Список точок маршруту (Drag&Drop)
+    // Список точок маршруту (Drag&Drop List)
     Waypoints.initSortable((oldIdx, newIdx) => {
         const item = state.waypoints.splice(oldIdx, 1)[0];
         state.waypoints.splice(newIdx, 0, item);
 
         refreshUi();
         triggerRouteCalculation();
+    });
+
+    // Додавання проміжної точки (Drag&Drop Line)
+    MapCore.initRouteDragSystem((lat, lng) => {
+        insertWaypointAtSmartIndex(lat, lng);
     });
 
     const qrModal = document.getElementById('qrModal');
@@ -57,13 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const isExpandedMode = panel.classList.contains('expanded');
 
             if (isExpandedMode) {
-                // 1. Прибираємо клас розширення панелі
                 panel.classList.remove('expanded');
-
-                // 2. Повертаємо сайдбар на повну висоту
                 if (sidebar) sidebar.classList.remove('shrunk');
-
-                // 3. Повертаємо іконку кнопки розширення в початковий стан
                 const btnIcon = document.getElementById('expand-icon');
                 if(btnIcon) btnIcon.className = 'fas fa-expand';
             }
@@ -95,7 +96,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 else sidebar.classList.remove('shrunk');
             }
 
-            // Якщо розгорнули, то примусово відкриваємо панель (якщо була закрита)
             if (isExpanded && !state.isElevationOpen) {
                 state.isElevationOpen = true;
                 Ui.setElevationPanelState(true);
@@ -156,25 +156,23 @@ function reverseRoute() {
 function triggerRouteCalculation() {
     if (fetchTimeout) clearTimeout(fetchTimeout);
 
-    // Якщо точок замало - очищаємо все
     if (state.waypoints.length < 2) {
-        Ui.updateRouteInfo(0, 0);
-        Ui.setPanelVisibility(false); // Ховаємо панель
+        Ui.updateRouteInfo(0, 0, null); // Передаємо null, щоб прибрати іконку гори
+        Ui.setPanelVisibility(false);
         MapCore.drawPolyline([], null);
         state.currentTrackPoints = [];
         state.currentClimbs = null;
+        state.totalAscent = null; // Скидаємо набір
         state.isElevationRelevant = true;
         return;
     }
 
-    // 1. Перевірка Кешу через новий метод
     const cachedEntry = Cache.get(state.waypoints);
 
     if (cachedEntry) {
         console.log("Знайдено в кеші");
         applyRouteGeometry(cachedEntry);
 
-        // Перевіряємо, чи є в кеші висоти
         if (Cache.hasElevationData(cachedEntry)) {
             console.log("...з висотами");
             state.currentClimbs = cachedEntry.climbs;
@@ -188,7 +186,6 @@ function triggerRouteCalculation() {
             state.currentClimbs = null;
             state.isElevationRelevant = false;
 
-            // Якщо користувач вже тримає панель відкритою - докачуємо
             if (state.isElevationOpen) {
                 fetchAndRenderElevation();
             }
@@ -196,23 +193,18 @@ function triggerRouteCalculation() {
         return;
     }
 
-    // 2. Якщо в кеші пусто - робимо запит
     fetchTimeout = setTimeout(async () => {
         try {
-            // Лише геометрія (швидко)
             const data = await Api.calculateRouteApi(state.waypoints);
 
-            // Зберігаємо в кеш
             Cache.set(state.waypoints, data);
 
-            // Оновлюємо стейт
             state.currentTrackPoints = data.trackPoints;
             state.currentClimbs = null;
             state.isElevationRelevant = false;
 
             applyRouteGeometry(data);
 
-            // Якщо панель відкрита - докачуємо висоти
             if (state.isElevationOpen) {
                 fetchAndRenderElevation();
             } else {
@@ -230,80 +222,82 @@ function triggerRouteCalculation() {
 function applyRouteGeometry(data) {
     state.currentTrackPoints = data.trackPoints;
     state.routeDistance = data.distanceMeters;
+
+    // ВИПРАВЛЕНО: Використовуємо правильну змінну totalAscent
+    // Якщо data.totalAscent є (з кешу), беремо його, інакше null
+    state.totalAscent = (data.totalAscent !== undefined && data.totalAscent !== null) ? data.totalAscent : null;
+
     state.routeDuration = data.durationSeconds;
 
     MapCore.drawPolyline(data.trackPoints, (latLng) => {
         addWaypoint(latLng.lat, latLng.lng, state.waypoints.length - 1);
     });
-    Ui.updateRouteInfo(data.distanceMeters, data.durationSeconds);
+
+    // ВИПРАВЛЕНО: Передаємо state.totalAscent
+    Ui.updateRouteInfo(state.routeDistance, state.routeDuration, state.totalAscent);
 
     Ui.setPanelVisibility(true);
 }
 
 // Дозавантажує висоти і оновлює кеш
 async function fetchAndRenderElevation() {
-    // Перевірка на наявність точок
     if (!state.currentTrackPoints || state.currentTrackPoints.length === 0) return;
 
     try {
         const elevationData = await Api.getElevationApi(state.currentTrackPoints);
 
-        // === ВИПРАВЛЕННЯ ===
-        // 1. Оновлюємо стейт НЕГАЙНО, бо дані ми отримали успішно
+        console.log("Elevation Data received:", elevationData);
+
+        // 1. Оновлюємо стейт
         state.currentClimbs = elevationData.climbs;
+
+        // ВИПРАВЛЕНО: Записуємо отриманий набір у стейт!
+        state.totalAscent = elevationData.totalAscent;
 
         if (elevationData.trackPoints) {
             state.currentTrackPoints = elevationData.trackPoints;
         }
 
-        // Встановлюємо прапорець: дані є і вони свіжі!
         state.isElevationRelevant = true;
 
-        // 2. Оновлюємо кеш "фоново" (якщо вдасться - супер, ні - не страшно для поточної сесії)
         Cache.updateWithElevation(state.waypoints, elevationData);
 
-        // 3. Малюємо дані, але тільки якщо користувач все ще тримає панель відкритою
+        // ВИПРАВЛЕНО: Викликаємо оновлення UI з новим значенням totalAscent
+        Ui.updateRouteInfo(state.routeDistance, state.routeDuration, state.totalAscent);
+
         if (state.isElevationOpen) {
             renderElevationUI();
         }
 
     } catch (e) {
-        // Якщо помилка - скидаємо прапорець, щоб спробувати наступного разу
         state.isElevationRelevant = false;
         console.error("Не вдалося завантажити висоти", e);
     }
 }
 
-// Просто малює висоти (використовуючи дані зі STATE)
 function renderElevationUI() {
-    // Тепер передаємо ТРИ аргументи: точки, підйоми, стан панелі
     Elevation.updateElevation(
         state.currentTrackPoints,
         state.currentClimbs,
         state.isElevationOpen
     );
-
-    // Малюємо червоні лінії на карті
     MapCore.drawClimbs(state.currentClimbs, state.currentTrackPoints);
 }
 
-// === ІНШЕ (ЕКСПОРТ та QR) ===
+// ... далі exportHandler, shareRouteQrHandler, insertWaypointAtSmartIndex ...
+// ... у них змін немає, окрім того, що при експорті теж можна використовувати state.totalAscent якщо треба ...
+
 async function exportHandler() {
-    // 1. Перевірка на мінімальну кількість точок
     if (!state.currentTrackPoints || state.currentTrackPoints.length < 2) {
-        alert("Побудуйте маршрут!"); // Або "Маршрут ще не готовий"
+        alert("Побудуйте маршрут!");
         return;
     }
 
-    // Якщо дані висот не актуальні (прапорець false)
     if (!state.isElevationRelevant) {
         try {
-            // Примусово завантажуємо висоти та чекаємо результат
             console.log("Експорт: Примусове завантаження актуальних даних висот...");
             await fetchAndRenderElevation();
 
-            // Якщо після завантаження дані все ще неактуальні (наприклад, помилка API),
-            // то ми не можемо експортувати.
             if (!state.isElevationRelevant) {
                 throw new Error("Не вдалося отримати актуальні дані висот.");
             }
@@ -329,7 +323,7 @@ async function exportHandler() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename; // <--- Використовуємо ім'я з DTO
+        a.download = filename;
 
         document.body.appendChild(a);
         a.click();
@@ -342,22 +336,16 @@ async function exportHandler() {
     }
 }
 
-// Обробник натискання "QR Експорт"
 async function shareRouteQrHandler() {
     if (!state.currentTrackPoints || state.currentTrackPoints.length < 2) {
-        alert("Побудуйте маршрут!"); // Або "Маршрут ще не готовий"
+        alert("Побудуйте маршрут!");
         return;
     }
 
-    // Якщо дані висот не актуальні (прапорець false)
     if (!state.isElevationRelevant) {
         try {
-            // Примусово завантажуємо висоти та чекаємо результат
             console.log("Експорт: Примусове завантаження актуальних даних висот...");
             await fetchAndRenderElevation();
-
-            // Якщо після завантаження дані все ще неактуальні (наприклад, помилка API),
-            // то ми не можемо експортувати.
             if (!state.isElevationRelevant) {
                 throw new Error("Не вдалося отримати актуальні дані висот.");
             }
@@ -369,17 +357,13 @@ async function shareRouteQrHandler() {
     }
 
     try {
-
         const exportRequestData = {
             waypoints: state.currentTrackPoints,
             routeName: state.routeTitle,
             includeElevation: true
         };
 
-        // 3. Отримуємо ID від сервера (Api.shareRouteApi має бути оновлено)
         const routeId = await Api.shareRouteApi(exportRequestData);
-
-        // 4. Формуємо URL та відображаємо QR
         const downloadUrl = `${window.location.origin}/api/route/download/${routeId}`;
         const modal = document.getElementById('qrModal');
         const qrContainer = document.getElementById('qrcode');
@@ -393,9 +377,36 @@ async function shareRouteQrHandler() {
     }
 }
 
-// Обробник закриття модалки
 function closeQrModalHandler(e) {
     if (!e || e.target.id === 'qrModal') {
         document.getElementById('qrModal').style.display = "none";
     }
+}
+
+function insertWaypointAtSmartIndex(newLat, newLng) {
+    if (state.waypoints.length < 2) {
+        addWaypoint(newLat, newLng);
+        return;
+    }
+
+    let bestIndex = 0;
+    let minDetour = Infinity;
+
+    for (let i = 0; i < state.waypoints.length - 1; i++) {
+        const wpA = state.waypoints[i];
+        const wpB = state.waypoints[i + 1];
+
+        const distA_New = MapCore.getDistance(wpA.lat, wpA.lng, newLat, newLng);
+        const distNew_B = MapCore.getDistance(newLat, newLng, wpB.lat, wpB.lng);
+        const distA_B   = MapCore.getDistance(wpA.lat, wpA.lng, wpB.lat, wpB.lng);
+
+        const detour = (distA_New + distNew_B) - distA_B;
+
+        if (detour < minDetour) {
+            minDetour = detour;
+            bestIndex = i;
+        }
+    }
+
+    addWaypoint(newLat, newLng, bestIndex + 1);
 }

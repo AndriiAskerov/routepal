@@ -35,7 +35,7 @@ export function updateWithElevation(waypoints, elevationData) {
         const updated = {
             ...existing,
             climbs: elevationData.climbs,
-            // Якщо API висот повертає оновлені точки (з Z координатою), беремо їх
+            totalAscent: elevationData.totalAscent,
             trackPoints: elevationData.trackPoints || existing.trackPoints
         };
         storage.set(key, updated);

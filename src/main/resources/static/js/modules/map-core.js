@@ -3,10 +3,15 @@
  * Керує екземпляром Leaflet карти, шарами та маркерами.
  */
 
-let mapInstance = null;
+let map = null;
 let routeLayer = null;
 let highlightLayer = null; // Шар підсвітки
 let climbsLayerGroup = null;
+
+// Змінні для Drag&Drop маршруту
+let isDraggingRoute = false;
+let dragGhostMarker = null;
+let onRouteDragEndCallback = null; // Функція, яку викличемо після відпускання
 
 /**
  * Ініціалізує карту.
@@ -14,17 +19,18 @@ let climbsLayerGroup = null;
  * @param {Function} onClickCallback - Функція, що викликається при кліку по карті (lat, lng).
  */
 export function initMap(elementId, onClickCallback) {
-    mapInstance = L.map(elementId).setView([50.4501, 30.5234], 12);
+    map = L.map(elementId).setView([50.4501, 30.5234], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: 'OSM'
-    }).addTo(mapInstance);
+    }).addTo(map);
 
-    mapInstance.on('click', (e) => {
+    map.on('click', (e) => {
+        if (isDraggingRoute) return;
         onClickCallback(e.latlng.lat, e.latlng.lng);
     });
 
     // Ініціалізуємо групу шарів
-    climbsLayerGroup = L.layerGroup().addTo(mapInstance);
+    climbsLayerGroup = L.layerGroup().addTo(map);
 }
 
 /**
@@ -38,7 +44,7 @@ export function initMap(elementId, onClickCallback) {
  */
 export function addMarkerToMap(lat, lng, index, onDragEnd, onRightClick) {
     const icon = createNumberedIcon(index);
-    const marker = L.marker([lat, lng], { draggable: true, icon: icon }).addTo(mapInstance);
+    const marker = L.marker([lat, lng], { draggable: true, icon: icon }).addTo(map);
 
     marker.on('dragend', (e) => {
         const pos = e.target.getLatLng();
@@ -53,7 +59,7 @@ export function addMarkerToMap(lat, lng, index, onDragEnd, onRightClick) {
 }
 
 export function removeLayer(layer) {
-    if (layer && mapInstance) mapInstance.removeLayer(layer);
+    if (layer && map) map.removeLayer(layer);
 }
 
 export function updateMarkerIcon(marker, index) {
@@ -69,7 +75,7 @@ export function updateMarkerIcon(marker, index) {
 export function drawPolyline(points, onRouteClick) {
     // 1. Спочатку видаляємо стару лінію (треба завжди)
     if (routeLayer) {
-        mapInstance.removeLayer(routeLayer);
+        map.removeLayer(routeLayer);
         routeLayer = null;
     }
 
@@ -77,9 +83,30 @@ export function drawPolyline(points, onRouteClick) {
     if (!points || points.length === 0) return;
 
     const latLngs = points.map(p => [p.latitude, p.longitude]);
-    routeLayer = L.polyline(latLngs, { color: 'blue', weight: 5, opacity: 0.7 }).addTo(mapInstance);
+    routeLayer = L.polyline(latLngs, { color: 'blue', weight: 5, opacity: 0.7 }).addTo(map);
 
-    mapInstance.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
+    routeLayer.on('mousedown', (e) => {
+        // Зупиняємо переміщення карти, щоб не заважало
+        map.dragging.disable();
+        isDraggingRoute = true;
+        L.DomEvent.stop(e); // Зупиняємо спливання події
+
+        // Робимо лінію сірою ("редагування")
+        routeLayer.setStyle({ color: '#888', opacity: 0.5 });
+
+        // Створюємо маленький білий маркер під мишкою
+        dragGhostMarker = L.marker(e.latlng, {
+            icon: L.divIcon({
+                className: 'drag-ghost-icon', // Додамо стилі в CSS
+                html: '<div style="width: 12px; height: 12px; background: white; border: 2px solid #555; border-radius: 50%;"></div>',
+                iconSize: [12, 12],
+                iconAnchor: [6, 6]
+            }),
+            zIndexOffset: 1000
+        }).addTo(map);
+    });
+
+    map.fitBounds(routeLayer.getBounds(), { padding: [50, 50] });
 
     // Події лінії
     routeLayer.on('mouseover', function() { this.setStyle({ weight: 8 }); });
@@ -109,7 +136,7 @@ function createNumberedIcon(number) {
 export function highlightSegment(fullTrackPoints, startIndex, endIndex) {
     // 1. Прибираємо стару підсвітку
     if (highlightLayer) {
-        mapInstance.removeLayer(highlightLayer);
+        map.removeLayer(highlightLayer);
         highlightLayer = null;
     }
 
@@ -126,15 +153,15 @@ export function highlightSegment(fullTrackPoints, startIndex, endIndex) {
         weight: 8,        // Товстіша за маршрут
         opacity: 0.9,
         lineCap: 'round'
-    }).addTo(mapInstance);
+    }).addTo(map);
 
     // 4. Трохи наближаємо до сегменту (опціонально, можна закоментувати)
-    // mapInstance.fitBounds(highlightLayer.getBounds(), { maxZoom: 14, padding: [20, 20] });
+    // map.fitBounds(highlightLayer.getBounds(), { maxZoom: 14, padding: [20, 20] });
 }
 
 export function clearHighlight() {
     if (highlightLayer) {
-        mapInstance.removeLayer(highlightLayer);
+        map.removeLayer(highlightLayer);
         highlightLayer = null;
     }
 }
@@ -185,4 +212,49 @@ export function drawClimbs(climbs, allPoints) {
 // Функція для приховання підйомів (якщо закрили графік)
 export function clearClimbs() {
     if (climbsLayerGroup) climbsLayerGroup.clearLayers();
+}
+
+/**
+ * Ініціалізує логіку перетягування маршруту.
+ * @param {Function} onDragEnd - (lat, lng) => void. Викликається при відпусканні лінії.
+ */
+export function initRouteDragSystem(onDragEnd) {
+    onRouteDragEndCallback = onDragEnd;
+
+    // Слухачі глобально на карту для руху та відпускання
+    map.on('mousemove', handleMouseMove);
+    map.on('mouseup', handleMouseUp);
+}
+
+function handleMouseMove(e) {
+    if (isDraggingRoute && dragGhostMarker) {
+        // Рухаємо маркер за мишкою
+        dragGhostMarker.setLatLng(e.latlng);
+    }
+}
+
+function handleMouseUp(e) {
+    if (isDraggingRoute) {
+        isDraggingRoute = false;
+        map.dragging.enable(); // Вмикаємо карту назад
+
+        // Повертаємо колір лінії (синій)
+        if (routeLayer) routeLayer.setStyle({ color: '#3388ff', opacity: 1 });
+
+        // Видаляємо маркер-привид
+        if (dragGhostMarker) {
+            map.removeLayer(dragGhostMarker);
+            dragGhostMarker = null;
+        }
+
+        // Передаємо нові координати в main.js
+        if (onRouteDragEndCallback) {
+            onRouteDragEndCallback(e.latlng.lat, e.latlng.lng);
+        }
+    }
+}
+
+// Допоміжна функція для розрахунку дистанції (потрібна для main.js)
+export function getDistance(lat1, lng1, lat2, lng2) {
+    return map.distance([lat1, lng1], [lat2, lng2]);
 }

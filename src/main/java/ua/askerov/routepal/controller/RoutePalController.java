@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @RestController
 @RequestMapping("/api/route")
-public class RouteController {
+public class RoutePalController {
 
     private final RouteServiceImpl routeService; // Ін'єкція сервісу
     private final ExportServiceImpl exportService;
@@ -31,7 +31,7 @@ public class RouteController {
     private final Map<String, ExportRequestDTO> sharedRoutes = new ConcurrentHashMap<>();
 
 
-    public RouteController(RouteServiceImpl routeService, ExportServiceImpl exportService, ElevationService elevationService) {
+    public RoutePalController(RouteServiceImpl routeService, ExportServiceImpl exportService, ElevationService elevationService) {
         this.routeService = routeService;
         this.exportService = exportService;
         this.elevationService = elevationService;

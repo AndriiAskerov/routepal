@@ -3,12 +3,20 @@
  * Основна розмітка сторінки та контейнерів.
  */
 
+:root {
+    /* Це змінні середовища, які браузер сам підставить */
+    --safe-area-top: env(safe-area-inset-top);
+    --safe-area-bottom: env(safe-area-inset-bottom);
+}
+
 body {
     margin: 0;
-    height: 100vh;
+    height: 100dvh;
     display: flex;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     overflow: hidden; /* Запобігаємо скролу всієї сторінки */
+    padding-top: var(--safe-area-top);
+    padding-bottom: var(--safe-area-bottom);
 }
 
 .container {
@@ -21,4 +29,14 @@ body {
     flex-grow: 1; /* Карта займає все доступне місце */
     height: 100%;
     z-index: 1;
+}
+
+/* Якщо використовуєте Leaflet, класи SVG елементів такі: */
+.leaflet-interactive {
+    cursor: pointer; /* Або cursor: crosshair, або grab */
+}
+
+/* Коли лінія стає "активною" (ми змінили колір на сірий) */
+path[stroke="#888"] {
+    cursor: grabbing !important;
 }

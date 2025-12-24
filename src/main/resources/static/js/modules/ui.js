@@ -4,9 +4,12 @@
  */
 
 // Оновлює блок з дистанцією та часом
-export function updateRouteInfo(meters, seconds) {
+export function updateRouteInfo(meters, seconds, ascent) {
+    console.log('UI updateRouteInfo викликано:', { meters, seconds, ascent });
+
     const infoDiv = document.getElementById('route-info');
 
+    // Якщо скинули маршрут - очищаємо
     if (meters === 0) {
         infoDiv.innerHTML = '';
         return;
@@ -22,9 +25,21 @@ export function updateRouteInfo(meters, seconds) {
         timeStr = `${hours} год ${minutes} хв`;
     }
 
+    // 1. Формуємо HTML для набору висоти ТІЛЬКИ якщо він існує
+    let ascentHtml = '';
+    // Перевіряємо саме на null/undefined, бо набір може бути 0 (на рівнині), і це валідне число
+    if (ascent !== null && ascent !== undefined) {
+        const ascentStr = `${Math.round(ascent)} м`;
+        ascentHtml = `<span><i class="fas fa-mountain"></i> <b>${ascentStr}</b></span>`;
+    }
+
+    // 2. Вставляємо в HTML (додав gap: 10px для гарного відступу між елементами)
     infoDiv.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; justify-content:space-around; align-items:center; gap: 15px; font-size: 0.9rem;">
             <span><i class="fas fa-ruler-horizontal"></i> <b>${km} км</b></span>
+            
+            ${ascentHtml}
+            
             <span><i class="far fa-clock"></i> <b>${timeStr}</b></span>
         </div>
     `;
